@@ -114,7 +114,8 @@ body[data-hand="right"] .navrow{ flex-direction:row-reverse; }
   font-size:calc(20px * var(--step)); font-weight:800;
   flex:1;
 }
-body[data-hand="right"] .crumb{ text-align:right; }
+/* 只有在返回鍵存在時標題才靠右，否則第一層的標題會孤立在右上角 */
+body[data-hand="right"] .navrow:has(.backbtn:not([hidden])) .crumb{ text-align:right; }
 
 /* ---------- 格狀選單 ---------- */
 .grid{
@@ -462,6 +463,14 @@ function art(word, cls){
   </div>`;
 }
 
+/* 類別格子：assets/img/cat-{類別id}.webp，找不到就退回單字符號 */
+function catArt(c){
+  return `<div class="art">
+    <img src="assets/img/cat-${c.id}.webp" alt=""
+         onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ph',textContent:'${c.glyph}'}))">
+  </div>`;
+}
+
 /* ============================================================
    5. 畫面
    ============================================================ */
@@ -484,7 +493,7 @@ function renderComm(){
     crumb.textContent = "你想說什麼？";
     view.innerHTML = `<div class="grid">${CATEGORIES.map(c => `
       <button class="tile cat" data-cat="${c.id}">
-        <div class="art"><span class="ph">${c.glyph}</span></div>
+        ${catArt(c)}
         <div class="label">${c.name}</div>
       </button>`).join("")}</div>`;
     view.querySelectorAll("[data-cat]").forEach(b =>
@@ -510,7 +519,7 @@ function renderPrac(){
     view.innerHTML = `<div class="grid">${cats.map(c => {
       const n = byCat(c.id).filter(w => w.practice).length;
       return `<button class="tile cat" data-pc="${c.id}">
-        <div class="art"><span class="ph">${c.glyph}</span></div>
+        ${catArt(c)}
         <div class="label">${c.name}<br><small style="font-weight:400">${n} 題</small></div>
       </button>`;
     }).join("")}</div>`;
