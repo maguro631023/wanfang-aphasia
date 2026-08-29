@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>語圖 — 失語症溝通與練習</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0F2233">
+<!-- iOS 的「加到主畫面」不讀 manifest 的 icons，必須另外指定 -->
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="語圖">
+<style>
+/* ============================================================
+   設計代幣
+   臨床用途優先：純白底、高對比、無裝飾。
+   navy/teal 沿用 wanfang-* 系列的一致視覺。
+   ============================================================ */
+:root{
+  --ink:        #0F2233;
+  --ink-soft:   #4A5C6A;
+  --paper:      #FFFFFF;
+  --surface:    #EBF0F2;
+  --surface-2:  #DCE5E8;
+  --teal:       #0B6E6B;
+  --teal-dark:  #095452;
+  --amber:      #B45309;
+  --line:       #B9C7CE;
+  --focus:      #1D4ED8;
+
+  --step: 1;              /* 字級倍率，由設定調整 */
+  --tile-min: 148px;
+  --radius: 10px;
+}
+
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html,body{ height:100%; }
+body{
+  margin:0;
+  background:var(--surface);
+  color:var(--ink);
+  font-family:"Noto Sans TC","Noto Sans CJK TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  font-size:calc(17px * var(--step));
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+
+button{ font-family:inherit; font-size:inherit; cursor:pointer; }
+
+:focus-visible{
+  outline:4px solid var(--focus);
+  outline-offset:3px;
+}
+
+/* ---------- 版面骨架 ---------- */
+.app{
+  max-width:1080px; margin:0 auto; min-height:100%;
+  display:flex; flex-direction:column;
+  background:var(--paper);
+  box-shadow:0 0 0 1px var(--line);
+}
+
+.topbar{
+  display:flex; align-items:center; gap:10px;
+  padding:10px 14px;
+  background:var(--ink); color:#fff;
+  position:sticky; top:0; z-index:20;
+}
+.brand{
+  font-size:calc(19px * var(--step)); font-weight:800; letter-spacing:.06em;
+  margin-right:auto;
+}
+.brand small{
+  display:block; font-size:calc(11px * var(--step)); font-weight:400;
+  letter-spacing:.02em; opacity:.72;
+}
+
+.modeswitch{ display:flex; background:rgba(255,255,255,.14); border-radius:999px; padding:3px; }
+.modeswitch button{
+  border:0; background:transparent; color:#fff;
+  padding:9px 18px; border-radius:999px; font-weight:700;
+  min-height:44px;
+}
+.modeswitch button[aria-pressed="true"]{ background:var(--teal); }
+
+.iconbtn{
+  border:0; background:rgba(255,255,255,.14); color:#fff;
+  width:46px; height:46px; border-radius:10px; font-size:20px;
+  display:grid; place-items:center;
+}
+
+main{ flex:1; padding:18px 14px 28px; }
+
+/* ---------- 導覽列（永遠可見的返回） ---------- */
+.navrow{
+  display:flex; align-items:center; gap:12px;
+  margin-bottom:16px; min-height:56px;
+}
+body[data-hand="left"] .navrow{ flex-direction:row; }
+body[data-hand="right"] .navrow{ flex-direction:row-reverse; }
+
+.backbtn{
+  border:2px solid var(--line); background:var(--surface);
+  color:var(--ink); font-weight:700;
+  padding:12px 20px; border-radius:var(--radius); min-height:56px;
+  display:inline-flex; align-items:center; gap:8px;
+}
+.backbtn:hover{ background:var(--surface-2); }
+.backbtn[hidden]{ display:none; }
+
+.crumb{
+  font-size:calc(20px * var(--step)); font-weight:800;
+  flex:1;
+}
+body[data-hand="right"] .crumb{ text-align:right; }
+
+/* ---------- 格狀選單 ---------- */
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(var(--tile-min),1fr));
+  gap:14px;
+}
+
+.tile{
+  border:2px solid var(--line); background:var(--paper);
+  border-radius:var(--radius); padding:0; overflow:hidden;
+  min-height:172px;
+  display:flex; flex-direction:column;
+  transition:transform .08s ease, border-color .12s ease;
+}
+.tile:hover{ border-color:var(--teal); }
+.tile:active{ transform:scale(.97); }
+
+.tile .art{
+  flex:1; display:grid; place-items:center;
+  background:var(--surface); min-height:104px;
+}
+.tile .art img{ width:100%; height:100%; object-fit:cover; display:block; }
+.tile .art .ph{
+  font-size:calc(40px * var(--step)); font-weight:800; color:var(--teal-dark);
+  letter-spacing:.04em;
+}
+.tile .label{
+  padding:11px 8px; font-size:calc(19px * var(--step)); font-weight:700;
+  border-top:2px solid var(--line);
+}
+body[data-text="off"] .tile .label{ display:none; }
+body[data-text="off"] .tile{ min-height:150px; }
+
+.tile.cat .art{ background:var(--ink); }
+.tile.cat .art .ph{ color:#fff; }
+
+/* ---------- 說出後的確認 ---------- */
+.said{
+  position:fixed; left:50%; bottom:26px; transform:translateX(-50%);
+  background:var(--ink); color:#fff;
+  padding:16px 30px; border-radius:14px;
+  font-size:calc(26px * var(--step)); font-weight:800;
+  box-shadow:0 10px 30px rgba(15,34,51,.34);
+  z-index:40; max-width:90vw; text-align:center;
+}
+.said[hidden]{ display:none; }
+
+/* ---------- 練習模式 ---------- */
+.practice{ max-width:640px; margin:0 auto; }
+
+.stimulus{
+  border:2px solid var(--line); border-radius:var(--radius);
+  background:var(--surface); overflow:hidden;
+  aspect-ratio:4/3; display:grid; place-items:center; margin-bottom:18px;
+}
+.stimulus img{ width:100%; height:100%; object-fit:cover; }
+.stimulus .ph{ font-size:calc(76px * var(--step)); font-weight:800; color:var(--teal-dark); }
+
+.ask{
+  text-align:center; font-size:calc(22px * var(--step)); font-weight:700;
+  margin:0 0 18px;
+}
+
+.answers{ display:grid; gap:12px; }
+.bigbtn{
+  border:2px solid transparent; border-radius:var(--radius);
+  padding:18px 20px; min-height:64px; font-weight:800;
+  font-size:calc(20px * var(--step));
+}
+.bigbtn.ok{ background:var(--teal); color:#fff; }
+.bigbtn.ok:hover{ background:var(--teal-dark); }
+.bigbtn.help{ background:var(--paper); color:var(--amber); border-color:var(--amber); }
+.bigbtn.help:hover{ background:#FFF7ED; }
+.bigbtn.ghost{ background:var(--surface); color:var(--ink); border-color:var(--line); }
+
+/* 提示階梯 —— 這是本頁的核心結構，層級本身就是資訊 */
+.ladder{ margin-top:20px; border-left:5px solid var(--surface-2); padding-left:0; }
+.rung{
+  border:2px solid var(--line); border-left:0;
+  background:var(--paper); margin-bottom:10px;
+  border-radius:0 var(--radius) var(--radius) 0;
+  overflow:hidden;
+}
+.rung[data-reached="true"]{ border-color:var(--amber); }
+.rung > .rung-head{
+  width:100%; text-align:left; border:0; background:transparent;
+  padding:15px 16px; min-height:60px;
+  display:flex; align-items:center; gap:14px; font-weight:700;
+}
+.rung .num{
+  flex:0 0 auto; width:34px; height:34px; border-radius:50%;
+  background:var(--surface-2); color:var(--ink);
+  display:grid; place-items:center; font-size:calc(15px * var(--step)); font-weight:800;
+}
+.rung[data-reached="true"] .num{ background:var(--amber); color:#fff; }
+.rung-body{ padding:0 16px 16px; }
+.rung-body[hidden]{ display:none; }
+
+.cuelist{ list-style:none; margin:0; padding:0; display:grid; gap:9px; }
+.cuelist li{
+  background:var(--surface); border-radius:8px; padding:13px 15px;
+  font-size:calc(19px * var(--step));
+}
+.phon{
+  font-size:calc(44px * var(--step)); font-weight:800; color:var(--teal-dark);
+  text-align:center; padding:14px 0; letter-spacing:.08em;
+}
+.phon small{ display:block; font-size:calc(14px * var(--step)); color:var(--ink-soft); font-weight:500; letter-spacing:0; }
+.reveal{
+  font-size:calc(46px * var(--step)); font-weight:800; text-align:center;
+  padding:10px 0 16px;
+}
+
+/* ---------- 結果 ---------- */
+.summary{ max-width:640px; margin:0 auto; }
+.sumrow{
+  display:flex; justify-content:space-between; align-items:center; gap:12px;
+  border-bottom:1px solid var(--line); padding:13px 2px;
+  font-size:calc(19px * var(--step));
+}
+.pill{
+  font-size:calc(14px * var(--step)); font-weight:800;
+  padding:5px 12px; border-radius:999px; white-space:nowrap;
+}
+.lv0{ background:#D6F0E4; color:#0A5B3C; }
+.lv1{ background:#FDECC8; color:#7C4A00; }
+.lv2{ background:#FBD9B5; color:#7C3300; }
+.lv3{ background:#F3D2D2; color:#7C1F1F; }
+
+/* ---------- 設定 ---------- */
+dialog{
+  border:0; border-radius:14px; padding:0; width:min(440px,92vw);
+  box-shadow:0 24px 60px rgba(15,34,51,.3);
+}
+dialog::backdrop{ background:rgba(15,34,51,.5); }
+.dlg-head{ background:var(--ink); color:#fff; padding:16px 20px; font-weight:800; font-size:calc(19px * var(--step)); }
+.dlg-body{ padding:18px 20px 22px; display:grid; gap:20px; }
+.field > span{ display:block; font-weight:700; margin-bottom:9px; }
+.seg{ display:flex; gap:8px; }
+.seg button{
+  flex:1; border:2px solid var(--line); background:var(--paper);
+  padding:13px 8px; border-radius:9px; font-weight:700; min-height:52px;
+}
+.seg button[aria-pressed="true"]{ background:var(--teal); color:#fff; border-color:var(--teal); }
+
+footer{
+  padding:16px 14px 26px; text-align:center;
+  color:var(--ink-soft); font-size:calc(13px * var(--step)); line-height:1.6;
+  border-top:1px solid var(--line);
+}
+.notice{ font-weight:700; color:var(--amber); }
+
+@media (prefers-reduced-motion:reduce){
+  *{ transition:none !important; animation:none !important; }
+}
+</style>
+</head>
+<body data-hand="right" data-text="on">
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">語圖<small>失語症溝通與練習・研發測試版</small></div>
+    <div class="modeswitch" role="group" aria-label="模式">
+      <button id="mComm"  aria-pressed="true">溝通</button>
+      <button id="mPrac"  aria-pressed="false">練習</button>
+    </div>
+    <button class="iconbtn" id="btnSet" aria-label="設定">⚙</button>
+  </header>
+
+  <main>
+    <div class="navrow">
+      <button class="backbtn" id="btnBack" hidden>← 回上一頁</button>
+      <div class="crumb" id="crumb">請選擇</div>
+    </div>
+    <div id="view"></div>
+  </main>
+
+  <footer>
+    <span class="notice">研發測試中，非醫療器材</span><br>
+    本程式不進行診斷，亦不提供個別化醫療建議。所有使用紀錄僅存放於本機裝置，不會上傳。
+  </footer>
+</div>
+
+<div class="said" id="said" hidden aria-live="polite"></div>
+
+<dialog id="dlg">
+  <div class="dlg-head">設定</div>
+  <div class="dlg-body">
+    <label class="field">
+      <span>文字標籤</span>
+      <div class="seg" data-set="text">
+        <button data-v="on"  aria-pressed="true">顯示文字</button>
+        <button data-v="off" aria-pressed="false">只看圖片</button>
+      </div>
+    </label>
+    <label class="field">
+      <span>操作慣用手</span>
+      <div class="seg" data-set="hand">
+        <button data-v="left"  aria-pressed="false">左手</button>
+        <button data-v="right" aria-pressed="true">右手</button>
+      </div>
+    </label>
+    <label class="field">
+      <span>字級</span>
+      <div class="seg" data-set="step">
+        <button data-v="1"    aria-pressed="true">標準</button>
+        <button data-v="1.15" aria-pressed="false">大</button>
+        <button data-v="1.32" aria-pressed="false">特大</button>
+      </div>
+    </label>
+    <button class="bigbtn ghost" id="btnExport">匯出練習紀錄（JSON）</button>
+    <button class="bigbtn ok" id="btnClose">完成</button>
+  </div>
+</dialog>
+
+<script>
+/* ============================================================
+   1. 詞庫核心 —— 溝通模式與練習模式共用同一份資料
+   ------------------------------------------------------------
+   欄位說明：
+     practice        是否納入命名練習（名詞為主；需求詞與動作先設 false）
+     semantic_cues   SFA 式語意提示，順序＝用途／外觀／類別／地點／關聯
+     phon_zhuyin     音韻提示載體【暫用注音首音，Phase 0 前導測試後可能改為
+                     聲旁或口型影片，改這個欄位即可，不必動介面】
+     name_agreement / aoa / familiarity / imageability / frequency
+                     心理語言學常模，先留 null，取得後補
+   資產約定：
+     圖片 assets/img/{id}.webp   語音 assets/audio/{id}.mp3
+     檔案不存在時自動退回文字佔位圖與系統語音合成
+   ============================================================ */
+const CATEGORIES = [
+  { id:"daily",  name:"日常用品", glyph:"物" },
+  { id:"food",   name:"食物飲料", glyph:"食" },
+  { id:"body",   name:"身體不適", glyph:"體" },
+  { id:"people", name:"家人醫護", glyph:"人" },
+  { id:"act",    name:"我想要",   glyph:"要" }
+];
+
+const LEXICON = [
+  { id:"n001", cat:"daily", zh:"牙刷", zhuyin:"ㄧㄚˊ ㄕㄨㄚ", phon_zhuyin:"ㄧ", practice:true,
+    semantic_cues:["用來刷牙齒","細細長長的，前面有毛","日常用品","放在浴室","跟牙膏一起用"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:false },
+  { id:"n002", cat:"daily", zh:"眼鏡", zhuyin:"ㄧㄢˇ ㄐㄧㄥˋ", phon_zhuyin:"ㄧ", practice:true,
+    semantic_cues:["用來看清楚東西","有兩片鏡片和鏡架","日常用品","戴在臉上","跟眼睛有關"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:false },
+  { id:"n003", cat:"daily", zh:"毛巾", zhuyin:"ㄇㄠˊ ㄐㄧㄣ", phon_zhuyin:"ㄇ", practice:true,
+    semantic_cues:["用來擦乾身體","軟軟的、方形的布","日常用品","放在浴室","洗完澡會用到"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:false },
+  { id:"n004", cat:"daily", zh:"電視", zhuyin:"ㄉㄧㄢˋ ㄕˋ", phon_zhuyin:"ㄉ", practice:true,
+    semantic_cues:["用來看節目","方形的大螢幕","電器","放在客廳","要用遙控器打開"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:false },
+
+  { id:"n005", cat:"food", zh:"水", zhuyin:"ㄕㄨㄟˇ", phon_zhuyin:"ㄕ", practice:true,
+    semantic_cues:["用來喝的","透明沒有顏色","飲料","裝在杯子裡","口渴的時候要喝"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:false },
+  { id:"n006", cat:"food", zh:"飯", zhuyin:"ㄈㄢˋ", phon_zhuyin:"ㄈ", practice:true,
+    semantic_cues:["用來吃的","白色的一粒一粒","主食","裝在碗裡","配菜一起吃"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:false },
+  { id:"n007", cat:"food", zh:"麵", zhuyin:"ㄇㄧㄢˋ", phon_zhuyin:"ㄇ", practice:true,
+    semantic_cues:["用來吃的","長長條條的","主食","裝在碗裡","用筷子夾起來吃"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:false },
+  { id:"n008", cat:"food", zh:"藥", zhuyin:"ㄧㄠˋ", phon_zhuyin:"ㄧ", practice:true,
+    semantic_cues:["用來治病的","小小顆的","醫療用品","裝在藥袋裡","要配水吞下去"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:false },
+
+  { id:"b001", cat:"body", zh:"頭痛", zhuyin:"ㄊㄡˊ ㄊㄨㄥˋ", phon_zhuyin:"ㄊ", practice:false },
+  { id:"b002", cat:"body", zh:"想睡",  zhuyin:"ㄒㄧㄤˇ ㄕㄨㄟˋ", phon_zhuyin:"ㄒ", practice:false },
+  { id:"b003", cat:"body", zh:"口渴",  zhuyin:"ㄎㄡˇ ㄎㄜˇ", phon_zhuyin:"ㄎ", practice:false },
+  { id:"b004", cat:"body", zh:"會冷",  zhuyin:"ㄏㄨㄟˋ ㄌㄥˇ", phon_zhuyin:"ㄏ", practice:false },
+
+  { id:"p001", cat:"people", zh:"太太", zhuyin:"ㄊㄞˋ ㄊㄞ˙", phon_zhuyin:"ㄊ", practice:true,
+    semantic_cues:["是我的家人","結婚的對象","家人","住在一起","跟先生是一對"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:true },
+  { id:"p002", cat:"people", zh:"兒子", zhuyin:"ㄦˊ ㄗ˙", phon_zhuyin:"ㄦ", practice:true,
+    semantic_cues:["是我的家人","男生的孩子","家人","會來探病","跟女兒是兄妹"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:true },
+  { id:"p003", cat:"people", zh:"女兒", zhuyin:"ㄋㄩˇ ㄦˊ", phon_zhuyin:"ㄋ", practice:true,
+    semantic_cues:["是我的家人","女生的孩子","家人","會來探病","跟兒子是兄妹"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:true },
+  { id:"p004", cat:"people", zh:"醫生", zhuyin:"ㄧ ㄕㄥ", phon_zhuyin:"ㄧ", practice:true,
+    semantic_cues:["幫我看病的人","穿白袍、掛聽診器","醫護人員","在醫院","跟護理師一起工作"],
+    name_agreement:null, aoa:null, familiarity:null, imageability:null, frequency:null, is_personal:false },
+
+  { id:"a001", cat:"act", zh:"上廁所",  zhuyin:"ㄕㄤˋ ㄘㄜˋ ㄙㄨㄛˇ", phon_zhuyin:"ㄕ", practice:false },
+  { id:"a002", cat:"act", zh:"坐起來",  zhuyin:"ㄗㄨㄛˋ ㄑㄧˇ ㄌㄞˊ", phon_zhuyin:"ㄗ", practice:false },
+  { id:"a003", cat:"act", zh:"要吃飯",  zhuyin:"ㄧㄠˋ ㄔ ㄈㄢˋ", phon_zhuyin:"ㄧ", practice:false },
+  { id:"a004", cat:"act", zh:"要洗澡",  zhuyin:"ㄧㄠˋ ㄒㄧˇ ㄗㄠˇ", phon_zhuyin:"ㄧ", practice:false }
+];
+
+const byId  = id => LEXICON.find(w => w.id === id);
+const byCat = c  => LEXICON.filter(w => w.cat === c);
+
+/* ============================================================
+   2. 本機儲存 —— 絕不外傳。localStorage 不可用時退回記憶體。
+   ============================================================ */
+const store = (() => {
+  let mem = {};
+  let ok = false;
+  try { localStorage.setItem("__t","1"); localStorage.removeItem("__t"); ok = true; } catch(e){ ok = false; }
+  return {
+    get(k, d){
+      try { const v = ok ? localStorage.getItem(k) : mem[k]; return v == null ? d : JSON.parse(v); }
+      catch(e){ return d; }
+    },
+    set(k, v){
+      const s = JSON.stringify(v);
+      try { if (ok) localStorage.setItem(k, s); else mem[k] = s; } catch(e){ mem[k] = s; }
+    }
+  };
+})();
+
+/* ============================================================
+   3. 語音輸出 —— 優先播放預錄人聲，退回系統語音合成
+   （人聲對失語症者的辨識度明顯較好，正式版務必錄音）
+   ============================================================ */
+function speak(word){
+  const a = new Audio(`assets/audio/${word.id}.mp3`);
+  a.play().catch(() => {
+    if (!("speechSynthesis" in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(word.zh);
+    u.lang = "zh-TW"; u.rate = 0.85;
+    speechSynthesis.speak(u);
+  });
+  flash(word.zh);
+}
+
+let flashTimer = null;
+function flash(text){
+  const el = document.getElementById("said");
+  el.textContent = "🔊 " + text;
+  el.hidden = false;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { el.hidden = true; }, 2600);  // 僅為提示殘留，不影響任何操作
+}
+
+/* ============================================================
+   4. 圖片：檔案存在就用，不存在退回文字佔位圖
+   ============================================================ */
+function art(word, cls){
+  return `<div class="art">
+    <img src="assets/img/${word.id}.webp" alt=""
+         onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ph',textContent:'${word.zh}'}))">
+  </div>`;
+}
+
+/* ============================================================
+   5. 畫面
+   ============================================================ */
+const view  = document.getElementById("view");
+const crumb = document.getElementById("crumb");
+const back  = document.getElementById("btnBack");
+
+let mode = "comm";        // comm | prac
+let stack = [];           // 導覽堆疊，深度最多 2 層
+let session = null;       // 練習中的作答狀態
+
+function render(){
+  back.hidden = stack.length === 0;
+  if (mode === "comm") renderComm(); else renderPrac();
+}
+
+/* ---------- 溝通模式 ---------- */
+function renderComm(){
+  if (stack.length === 0){
+    crumb.textContent = "你想說什麼？";
+    view.innerHTML = `<div class="grid">${CATEGORIES.map(c => `
+      <button class="tile cat" data-cat="${c.id}">
+        <div class="art"><span class="ph">${c.glyph}</span></div>
+        <div class="label">${c.name}</div>
+      </button>`).join("")}</div>`;
+    view.querySelectorAll("[data-cat]").forEach(b =>
+      b.onclick = () => { stack.push(b.dataset.cat); render(); });
+  } else {
+    const cat = CATEGORIES.find(c => c.id === stack[0]);
+    crumb.textContent = cat.name;
+    view.innerHTML = `<div class="grid">${byCat(cat.id).map(w => `
+      <button class="tile" data-w="${w.id}">
+        ${art(w)}
+        <div class="label">${w.zh}</div>
+      </button>`).join("")}</div>`;
+    view.querySelectorAll("[data-w]").forEach(b =>
+      b.onclick = () => speak(byId(b.dataset.w)));
+  }
+}
+
+/* ---------- 練習模式 ---------- */
+function renderPrac(){
+  if (stack.length === 0){
+    crumb.textContent = "選擇練習主題";
+    const cats = CATEGORIES.filter(c => byCat(c.id).some(w => w.practice));
+    view.innerHTML = `<div class="grid">${cats.map(c => {
+      const n = byCat(c.id).filter(w => w.practice).length;
+      return `<button class="tile cat" data-pc="${c.id}">
+        <div class="art"><span class="ph">${c.glyph}</span></div>
+        <div class="label">${c.name}<br><small style="font-weight:400">${n} 題</small></div>
+      </button>`;
+    }).join("")}</div>`;
+    view.querySelectorAll("[data-pc]").forEach(b =>
+      b.onclick = () => { startSession(b.dataset.pc); stack.push(b.dataset.pc); render(); });
+    return;
+  }
+  if (session.i >= session.items.length){ renderSummary(); return; }
+  renderTrial();
+}
+
+function startSession(catId){
+  session = {
+    cat: catId,
+    started: new Date().toISOString(),
+    items: byCat(catId).filter(w => w.practice).map(w => w.id),
+    i: 0,
+    level: 0,           // 本題已展開到第幾層提示
+    results: []
+  };
+}
+
+function renderTrial(){
+  const w = byId(session.items[session.i]);
+  crumb.textContent = `第 ${session.i + 1} / ${session.items.length} 題`;
+
+  view.innerHTML = `
+  <div class="practice">
+    <div class="stimulus">
+      <img src="assets/img/${w.id}.webp" alt=""
+           onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ph',textContent:'${w.zh}'}))">
+    </div>
+    <p class="ask">這是什麼？請說出來</p>
+    <div class="answers">
+      <button class="bigbtn ok"   id="pOK">我說對了</button>
+      <button class="bigbtn help" id="pHelp">需要提示</button>
+    </div>
+
+    <div class="ladder" id="ladder" hidden>
+      <div class="rung" data-lv="1">
+        <button class="rung-head" data-open="1"><span class="num">1</span>語意提示</button>
+        <div class="rung-body" hidden>
+          <ul class="cuelist">${(w.semantic_cues || []).map(c => `<li>${c}</li>`).join("")}</ul>
+        </div>
+      </div>
+      <div class="rung" data-lv="2">
+        <button class="rung-head" data-open="2"><span class="num">2</span>音韻提示</button>
+        <div class="rung-body" hidden>
+          <div class="phon">${w.phon_zhuyin}<small>第一個音</small></div>
+        </div>
+      </div>
+      <div class="rung" data-lv="3">
+        <button class="rung-head" data-open="3"><span class="num">3</span>完整示範</button>
+        <div class="rung-body" hidden>
+          <div class="reveal">${w.zh}</div>
+          <button class="bigbtn ghost" id="pPlay">🔊 聽一次，然後跟著說</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  const ladder = view.querySelector("#ladder");
+
+  view.querySelector("#pHelp").onclick = () => {
+    ladder.hidden = false;
+    view.querySelector("#pHelp").textContent = "還是想不起來？往下一層";
+    openRung(Math.min(session.level + 1, 3));
+  };
+
+  view.querySelectorAll("[data-open]").forEach(b =>
+    b.onclick = () => openRung(Number(b.dataset.open)));
+
+  view.querySelector("#pOK").onclick = () => finishTrial(session.level);
+
+  function openRung(lv){
+    session.level = Math.max(session.level, lv);
+    view.querySelectorAll(".rung").forEach(r => {
+      const n = Number(r.dataset.lv);
+      r.querySelector(".rung-body").hidden = n !== lv;
+      r.dataset.reached = n <= session.level ? "true" : "false";
+    });
+    const play = view.querySelector("#pPlay");
+    if (play) play.onclick = () => speak(w);
+    if (lv === 3) speak(w);
+  }
+}
+
+function finishTrial(level){
+  session.results.push({ id: session.items[session.i], level, at: new Date().toISOString() });
+  session.i++; session.level = 0;
+  render();
+}
+
+function renderSummary(){
+  crumb.textContent = "這次練習的結果";
+  const names = ["無提示","語意提示","音韻提示","完整示範"];
+  const rows = session.results.map(r => {
+    const w = byId(r.id);
+    return `<div class="sumrow"><span>${w.zh}</span>
+      <span class="pill lv${r.level}">${names[r.level]}</span></div>`;
+  }).join("");
+  const lv0 = session.results.filter(r => r.level === 0).length;
+
+  view.innerHTML = `<div class="summary">
+    <p class="ask">${session.results.length} 題中，有 ${lv0} 題不需要提示就說出來了</p>
+    ${rows}
+    <div style="height:20px"></div>
+    <button class="bigbtn ok" id="again">再練一次</button>
+    <div style="height:10px"></div>
+    <button class="bigbtn ghost" id="other">換一個主題</button>
+  </div>`;
+
+  const log = store.get("sessions", []);
+  log.push({ cat: session.cat, started: session.started,
+             ended: new Date().toISOString(), results: session.results });
+  store.set("sessions", log);
+
+  view.querySelector("#again").onclick = () => { startSession(session.cat); render(); };
+  view.querySelector("#other").onclick = () => { stack = []; session = null; render(); };
+}
+
+/* ============================================================
+   6. 模式、返回、設定
+   ============================================================ */
+document.getElementById("mComm").onclick = () => setMode("comm");
+document.getElementById("mPrac").onclick = () => setMode("prac");
+
+function setMode(m){
+  mode = m; stack = []; session = null;
+  document.getElementById("mComm").setAttribute("aria-pressed", m === "comm");
+  document.getElementById("mPrac").setAttribute("aria-pressed", m === "prac");
+  render();
+}
+
+back.onclick = () => {
+  if (mode === "prac" && session && session.i < session.items.length && session.i > 0){
+    // 練習進行中往回 = 退出這次練習，不強留使用者
+    session = null; stack = [];
+  } else {
+    stack.pop();
+  }
+  render();
+};
+
+const dlg = document.getElementById("dlg");
+document.getElementById("btnSet").onclick = () => dlg.showModal();
+document.getElementById("btnClose").onclick = () => dlg.close();
+
+document.querySelectorAll(".seg").forEach(seg => {
+  seg.querySelectorAll("button").forEach(b => {
+    b.onclick = () => {
+      seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed","false"));
+      b.setAttribute("aria-pressed","true");
+      applySetting(seg.dataset.set, b.dataset.v);
+    };
+  });
+});
+
+function applySetting(key, val){
+  if (key === "step") document.documentElement.style.setProperty("--step", val);
+  else document.body.dataset[key] = val;
+  const s = store.get("settings", {}); s[key] = val; store.set("settings", s);
+}
+
+(function restore(){
+  const s = store.get("settings", {});
+  Object.entries(s).forEach(([k,v]) => {
+    applySetting(k, v);
+    const seg = document.querySelector(`.seg[data-set="${k}"]`);
+    if (!seg) return;
+    seg.querySelectorAll("button").forEach(b =>
+      b.setAttribute("aria-pressed", String(b.dataset.v === v)));
+  });
+})();
+
+document.getElementById("btnExport").onclick = () => {
+  const data = JSON.stringify({ exported:new Date().toISOString(),
+                                sessions: store.get("sessions", []) }, null, 2);
+  const url = URL.createObjectURL(new Blob([data], { type:"application/json" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = `aphasia-practice-${Date.now()}.json`; a.click();
+  URL.revokeObjectURL(url);
+};
+
+if ("serviceWorker" in navigator){
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
+}
+
+setMode("comm");
+</script>
+</body>
+</html>

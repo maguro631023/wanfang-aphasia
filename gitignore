@@ -1,0 +1,13 @@
+# 個資紅線：個人化詞彙的照片（太太／兒子／女兒等）是可識別個人的資料，
+# 一旦 push 到公開 repo 就無法真正撤回。這些檔案只放在測試裝置本機。
+assets/img/personal/
+*.HEIC
+*.heic
+
+# 錄音原始檔
+assets/audio/raw/
+
+# 系統雜項
+.DS_Store
+Thumbs.db
+node_modules/
