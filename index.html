@@ -327,6 +327,8 @@ footer{
         <button data-v="1.32" aria-pressed="false">特大</button>
       </div>
     </label>
+    <button class="bigbtn ghost" id="btnTest">測試語音</button>
+    <p id="voiceInfo" style="margin:-8px 0 0; font-size:calc(14px * var(--step)); color:var(--ink-soft)"></p>
     <button class="bigbtn ghost" id="btnExport">匯出練習紀錄（JSON）</button>
     <button class="bigbtn ok" id="btnClose">完成</button>
   </div>
@@ -426,22 +428,83 @@ const store = (() => {
       try { if (ok) localStorage.setItem(k, s); else mem[k] = s; } catch(e){ mem[k] = s; }
     }
   };
-})(); 
+})();
 
 /* ============================================================
-   3. 語音輸出 —— 優先播放預錄人聲，退回系統語音合成
-   （人聲對失語症者的辨識度明顯較好，正式版務必錄音）
+   3. 語音輸出
+   ------------------------------------------------------------
+   行動裝置的兩個限制，都必須在這裡處理：
+   (1) 語音合成只能在「使用者手勢的同步流程」中觸發。若先試播 mp3、
+       等 Promise 失敗再退回合成，就已經脫離手勢，iOS／Android 會
+       靜默擋掉（不報錯、就是沒聲音）。所以改成先查表再決定，
+       全程同步。
+   (2) iOS 需要在一次真實手勢中先呼叫過 speechSynthesis 才會啟用，
+       因此第一次觸控時送一個靜音 utterance 解鎖。
    ============================================================ */
-function speak(word){
-  const a = new Audio(`assets/audio/${word.id}.mp3`);
-  a.play().catch(() => {
-    if (!("speechSynthesis" in window)) return;
+const audioAvail = Object.create(null);   // id -> true/false，啟動時探測
+let   voicesReady = false;
+let   unlocked = false;
+
+function pickVoice(){
+  if (!("speechSynthesis" in window)) return null;
+  const vs = speechSynthesis.getVoices() || [];
+  return vs.find(v => v.lang === "zh-TW")
+      || vs.find(v => v.lang && v.lang.replace("_","-").startsWith("zh"))
+      || null;
+}
+
+if ("speechSynthesis" in window){
+  const mark = () => { voicesReady = true; };
+  speechSynthesis.addEventListener?.("voiceschanged", mark);
+  if ((speechSynthesis.getVoices() || []).length) mark();
+}
+
+/* 第一次觸控時解鎖，之後移除監聽 */
+function unlock(){
+  if (unlocked) return;
+  unlocked = true;
+  if ("speechSynthesis" in window){
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0;
+    try { speechSynthesis.speak(u); } catch(e){}
+  }
+}
+["pointerdown","touchstart","click"].forEach(ev =>
+  document.addEventListener(ev, unlock, { once:true, capture:true }));
+
+/* 啟動時探測哪些詞有預錄音檔；查不到就一律走語音合成 */
+(function probeAudio(){
+  LEXICON.forEach(w => {
+    audioAvail[w.id] = false;
+    fetch(`assets/audio/${w.id}.mp3`, { method:"HEAD" })
+      .then(r => { audioAvail[w.id] = r.ok; })
+      .catch(() => {});
+  });
+})();
+
+function tts(word){
+  if (!("speechSynthesis" in window)) return false;
+  try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(word.zh);
-    u.lang = "zh-TW"; u.rate = 0.85;
+    const v = pickVoice();
+    if (v) u.voice = v;
+    u.lang = "zh-TW";
+    u.rate = 0.85;
     speechSynthesis.speak(u);
-  });
+    return true;
+  } catch(e){ return false; }
+}
+
+function speak(word){
   flash(word.zh);
+  unlock();
+  if (audioAvail[word.id]){
+    const a = new Audio(`assets/audio/${word.id}.mp3`);
+    a.play().catch(() => tts(word));   // 檔案在但播不動時的最後保險
+  } else {
+    tts(word);                          // 同步呼叫，維持在手勢流程內
+  }
 }
 
 let flashTimer = null;
@@ -694,6 +757,23 @@ function applySetting(key, val){
       b.setAttribute("aria-pressed", String(b.dataset.v === v)));
   });
 })();
+
+document.getElementById("btnTest").onclick = () => {
+  unlock();
+  const info = document.getElementById("voiceInfo");
+  const v = pickVoice();
+  const n = ("speechSynthesis" in window) ? (speechSynthesis.getVoices() || []).length : 0;
+  if (!("speechSynthesis" in window)){
+    info.textContent = "這個瀏覽器不支援語音合成，請改用 Chrome 或 Safari。";
+  } else if (v){
+    info.textContent = `使用語音：${v.name}（${v.lang}）`;
+    tts({ zh:"你好，這是語音測試" });
+  } else if (n === 0){
+    info.textContent = "尚未載入任何語音，請等一下再按一次。";
+  } else {
+    info.textContent = "這台裝置沒有中文語音。Android 請到「設定 → 系統 → 語言與輸入 → 文字轉語音」安裝中文語音資料；iPhone 請到「設定 → 輔助使用 → 朗讀內容 → 語音」加入中文。";
+  }
+};
 
 document.getElementById("btnExport").onclick = () => {
   const data = JSON.stringify({ exported:new Date().toISOString(),
