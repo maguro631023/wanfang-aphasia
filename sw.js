@@ -3,7 +3,7 @@
    策略：app shell 採 cache-first；assets（圖片／音檔）採 stale-while-revalidate。
    注意：改版時務必更新 VERSION，否則使用者拿到的是舊快取。 */
 
-const VERSION = "yutu-v1";
+const VERSION = "yutu-v2";
 const SHELL = `${VERSION}-shell`;
 const ASSETS = `${VERSION}-assets`;
 
