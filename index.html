@@ -174,6 +174,67 @@ body[data-text="off"] .tile{ min-height:150px; }
 .tile.cat .art{ background:var(--ink); }
 .tile.cat .art .ph{ color:#fff; }
 
+/* ---------- 購物清單 ---------- */
+.tile-wrap{ position:relative; display:flex; }
+.tile-wrap > .tile{ flex:1; }
+
+.addbtn{
+  position:absolute; top:8px; right:8px; z-index:2;
+  width:58px; height:58px; border-radius:12px;
+  border:2px solid var(--teal); background:rgba(255,255,255,.94);
+  color:var(--teal-dark); font-size:calc(30px * var(--step)); font-weight:800;
+  display:grid; place-items:center; line-height:1;
+}
+.addbtn:hover{ background:var(--teal); color:#fff; }
+
+.qtytag{
+  position:absolute; top:8px; left:8px; z-index:2;
+  min-width:44px; height:44px; padding:0 10px; border-radius:22px;
+  background:var(--amber); color:#fff;
+  font-size:calc(20px * var(--step)); font-weight:800;
+  display:grid; place-items:center;
+}
+
+.cartbtn{ position:relative; }
+.cartbtn .count{
+  position:absolute; top:-6px; right:-6px;
+  min-width:24px; height:24px; padding:0 6px; border-radius:12px;
+  background:var(--amber); color:#fff;
+  font-size:13px; font-weight:800; display:grid; place-items:center;
+}
+
+.cartlist{ max-width:640px; margin:0 auto; }
+.cartrow{
+  display:flex; align-items:center; gap:14px;
+  border:2px solid var(--line); border-radius:var(--radius);
+  padding:10px 12px; margin-bottom:12px; background:var(--paper);
+}
+.cartrow .thumb{
+  width:74px; height:74px; flex:0 0 auto; border-radius:8px;
+  overflow:hidden; background:var(--surface); display:grid; place-items:center;
+}
+.cartrow .thumb img{ width:100%; height:100%; object-fit:cover; }
+.cartrow .thumb .ph{ font-size:calc(17px * var(--step)); font-weight:800; color:var(--teal-dark); }
+.cartrow .cname2{ flex:1; font-size:calc(21px * var(--step)); font-weight:800; }
+
+.stepper{ display:flex; align-items:center; gap:8px; }
+.stepper button{
+  width:54px; height:54px; border-radius:10px;
+  border:2px solid var(--line); background:var(--surface);
+  font-size:calc(26px * var(--step)); font-weight:800; line-height:1;
+}
+.stepper button:disabled{ opacity:.35; }
+.stepper .qty{
+  min-width:78px; text-align:center;
+  font-size:calc(26px * var(--step)); font-weight:800;
+}
+.stepper .qty small{
+  display:block; font-size:calc(15px * var(--step)); color:var(--amber);
+  letter-spacing:.14em; line-height:1.1;
+}
+
+.emptycart{ text-align:center; color:var(--ink-soft); padding:40px 0; font-size:calc(20px * var(--step)); }
+
 /* ---------- 說出後的確認 ---------- */
 .said{
   position:fixed; left:50%; bottom:26px; transform:translateX(-50%);
@@ -184,6 +245,55 @@ body[data-text="off"] .tile{ min-height:150px; }
   z-index:40; max-width:90vw; text-align:center;
 }
 .said[hidden]{ display:none; }
+
+/* ---------- 購物清單 ---------- */
+function renderCart(){
+  crumb.textContent = "我的清單";
+  const ids = Object.keys(cart).filter(id => byId(id));
+  if (!ids.length){
+    view.innerHTML = `<div class="emptycart">清單是空的<br>在物品上按「＋」就會加進來</div>`;
+    return;
+  }
+  view.innerHTML = `<div class="cartlist">
+    ${ids.map(id => {
+      const w = byId(id), q = cart[id];
+      return `<div class="cartrow">
+        <span class="thumb">
+          <img src="assets/img/${w.cat}/${w.id}.webp" alt=""
+               data-glyph="${w.zh}" onerror="imgFallback(this)">
+        </span>
+        <span class="cname2">${w.zh}</span>
+        <span class="stepper">
+          <button data-dec="${id}" aria-label="減少">−</button>
+          <span class="qty">${q}${clsOf(w)}<small>${"●".repeat(q)}</small></span>
+          <button data-inc="${id}" aria-label="增加" ${q >= cartMax() ? "disabled" : ""}>＋</button>
+        </span>
+      </div>`;
+    }).join("")}
+    <div style="height:12px"></div>
+    <button class="bigbtn ok" id="cartSay">🔊 唸出整份清單</button>
+    <div style="height:10px"></div>
+    <button class="bigbtn ghost" id="cartClear">清空清單</button>
+  </div>`;
+
+  view.querySelectorAll("[data-inc]").forEach(b =>
+    b.onclick = () => { setQty(b.dataset.inc, (cart[b.dataset.inc] || 0) + 1); render(); });
+  view.querySelectorAll("[data-dec]").forEach(b =>
+    b.onclick = () => { setQty(b.dataset.dec, (cart[b.dataset.dec] || 0) - 1); render(); });
+
+  view.querySelector("#cartSay").onclick = () => {
+    unlock();
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+    ids.forEach(id => {
+      const w = byId(id);
+      tts({ zh: `${w.zh} ${cart[id]}${clsOf(w)}` });   // 語音合成會自動排隊
+    });
+    flash("唸出清單");
+  };
+  view.querySelector("#cartClear").onclick = () => {
+    cart = {}; store.set("cart", cart); paintCartCount(); render();
+  };
+}
 
 /* ---------- 練習模式 ---------- */
 .practice{ max-width:640px; margin:0 auto; }
@@ -304,6 +414,7 @@ footer{
       <button id="mComm"  aria-pressed="true">溝通</button>
       <button id="mPrac"  aria-pressed="false">練習</button>
     </div>
+    <button class="iconbtn cartbtn" id="btnCart" aria-label="購物清單">🛒<span class="count" id="cartCount" hidden>0</span></button>
     <button class="iconbtn" id="btnSet" aria-label="設定">⚙</button>
   </header>
 
@@ -470,6 +581,53 @@ function visibleWords(catId){
     .slice()
     .sort((a, b) => (rank.has(a.id) ? rank.get(a.id) : 999)
                   - (rank.has(b.id) ? rank.get(b.id) : 999));
+}
+
+/* 中文量詞：唸出清單時要用對，不能一律說「個」。
+   沒列到的詞退回「個」。 */
+const CLASSIFIER = {
+  toothbrush:"支", glasses:"副", towel:"條", television:"台",
+  water:"杯", rice:"碗", noodles:"碗", medicine:"包",
+  wife:"位", son:"位", daughter:"位", doctor:"位"
+};
+const clsOf = w => CLASSIFIER[w.id] || "個";
+
+/* 可計數的類別。頭痛、上廁所這類詞沒有數量的概念，
+   預設不給加入清單；要開放請在 config.json 的 cart.categories 調整。 */
+function cartCategories(){
+  const c = CONFIG && CONFIG.cart;
+  return (c && Array.isArray(c.categories)) ? c.categories : ["daily","food"];
+}
+function cartEnabled(){
+  const c = CONFIG && CONFIG.cart;
+  return !c || c.enabled !== false;
+}
+function cartMax(){
+  const c = CONFIG && CONFIG.cart;
+  const n = c && Number(c.max);
+  return (n >= 1 && n <= 9) ? n : 5;
+}
+function isCountable(w){
+  return cartEnabled() && cartCategories().includes(w.cat);
+}
+
+let cart = store.get("cart", {});
+let cartOpen = false;
+
+function cartTotal(){
+  return Object.values(cart).reduce((a, b) => a + b, 0);
+}
+function setQty(id, n){
+  n = Math.max(0, Math.min(cartMax(), n));
+  if (n === 0) delete cart[id]; else cart[id] = n;
+  store.set("cart", cart);
+  paintCartCount();
+}
+function paintCartCount(){
+  const el = document.getElementById("cartCount");
+  const n = cartTotal();
+  el.textContent = n;
+  el.hidden = n === 0;
 }
 
 async function loadConfig(){
@@ -676,6 +834,9 @@ let stack = [];           // 導覽堆疊，深度最多 2 層
 let session = null;       // 練習中的作答狀態
 
 function render(){
+  document.getElementById("btnCart").hidden = !(cartEnabled() && mode === "comm");
+  paintCartCount();
+  if (cartOpen){ back.hidden = false; renderCart(); return; }
   back.hidden = stack.length === 0;
   if (mode === "comm") renderComm(); else renderPrac();
 }
@@ -695,13 +856,26 @@ function renderComm(){
   } else {
     const cat = CATEGORIES.find(c => c.id === stack[0]);
     crumb.textContent = cat.name;
-    view.innerHTML = `<div class="grid">${visibleWords(cat.id).map(w => `
-      <button class="tile" data-w="${w.id}">
-        ${art(w)}
-        <div class="label">${w.zh}</div>
-      </button>`).join("")}</div>`;
+    view.innerHTML = `<div class="grid">${visibleWords(cat.id).map(w => {
+      const q = cart[w.id] || 0;
+      return `<div class="tile-wrap">
+        <button class="tile" data-w="${w.id}">
+          ${art(w)}
+          <div class="label">${w.zh}</div>
+        </button>
+        ${isCountable(w) ? `<button class="addbtn" data-add="${w.id}" aria-label="加入清單：${w.zh}">＋</button>` : ""}
+        ${q ? `<span class="qtytag">${q}</span>` : ""}
+      </div>`;
+    }).join("")}</div>`;
     view.querySelectorAll("[data-w]").forEach(b =>
       b.onclick = () => speak(byId(b.dataset.w)));
+    view.querySelectorAll("[data-add]").forEach(b =>
+      b.onclick = () => {
+        const w = byId(b.dataset.add);
+        setQty(w.id, (cart[w.id] || 0) + 1);
+        speak(w);
+        render();
+      });
   }
 }
 
@@ -842,19 +1016,25 @@ document.getElementById("mComm").onclick = () => setMode("comm");
 document.getElementById("mPrac").onclick = () => setMode("prac");
 
 function setMode(m){
-  mode = m; stack = []; session = null;
+  mode = m; stack = []; session = null; cartOpen = false;
   document.getElementById("mComm").setAttribute("aria-pressed", m === "comm");
   document.getElementById("mPrac").setAttribute("aria-pressed", m === "prac");
   render();
 }
 
 back.onclick = () => {
+  if (cartOpen){ cartOpen = false; render(); return; }
   if (mode === "prac" && session && session.i < session.items.length && session.i > 0){
     // 練習進行中往回 = 退出這次練習，不強留使用者
     session = null; stack = [];
   } else {
     stack.pop();
   }
+  render();
+};
+
+document.getElementById("btnCart").onclick = () => {
+  cartOpen = !cartOpen;
   render();
 };
 

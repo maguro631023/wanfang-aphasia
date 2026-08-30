@@ -7,6 +7,13 @@
     "檔案若刪除或格式寫錯，程式會自動退回內建的預設順序，不會壞掉。"
   ],
 
+  "cart": {
+    "enabled": true,
+    "max": 5,
+    "categories": ["daily", "food", "people"],
+    "_說明": "enabled 關閉整個購物清單功能；max 是單項最大數量；categories 列出哪些類別的項目可以加入清單。身體不適（body）與我想要（act）預設不開放，因為頭痛、上廁所這類詞沒有數量的概念；需要的話把 body、act 加進來即可。"
+  },
+
   "categories": [
     { "id": "daily",  "enabled": true,  "_": "日常用品" },
     { "id": "food",   "enabled": true,  "_": "食物飲料" },
