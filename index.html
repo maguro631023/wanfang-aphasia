@@ -230,6 +230,26 @@ body[data-text="off"] .tile{ min-height:150px; }
   border-color:var(--amber); color:var(--amber);
   background:var(--paper); width:64px;
 }
+
+/* 強度型項目（身體不適）：1–5 直接點選，像疼痛量表 */
+.cartrow.scale{ display:block; }
+.cartrow.scale .rowtop{ display:flex; align-items:center; gap:14px; }
+.cartrow.scale .rm{
+  width:60px; height:60px; border-radius:10px; flex:0 0 auto;
+  border:2px solid var(--amber); background:var(--paper); color:var(--amber);
+  font-size:calc(24px * var(--step)); font-weight:800;
+}
+.scalerow{ display:flex; gap:8px; margin-top:12px; }
+.scalerow .lv{
+  flex:1; height:62px; border-radius:10px;
+  border:2px solid var(--line); background:var(--surface);
+  font-size:calc(22px * var(--step)); font-weight:800; color:var(--ink-soft);
+}
+.scalerow .lv.on{ background:var(--amber); border-color:var(--amber); color:#fff; }
+.scalelabel{
+  margin-top:10px; text-align:center; font-weight:800;
+  font-size:calc(22px * var(--step)); color:var(--amber);
+}
 .stepper .qty{
   min-width:78px; text-align:center;
   font-size:calc(26px * var(--step)); font-weight:800;
@@ -574,8 +594,19 @@ function cartSingleCats(){
   return (c && Array.isArray(c.single)) ? c.single : ["act", "body"];
 }
 function isSingle(w){
-  return cartSingleCats().includes(w.cat);
+  return cartSingleCats().includes(w.cat) && !isScale(w);
 }
+/* 強度類別：數字代表程度而非數量（身體不適）。
+   唸出時用副詞而不是數字——「非常頭痛」比「頭痛 5」好懂得多。 */
+function cartScaleCats(){
+  const c = CONFIG && CONFIG.cart;
+  return (c && Array.isArray(c.scale)) ? c.scale : ["body"];
+}
+function isScale(w){
+  return cartScaleCats().includes(w.cat);
+}
+const INTENSITY = ["", "有一點點", "有一點", "", "很", "非常"];
+const intensityText = (w, n) => `${INTENSITY[n] || ""}${w.zh}`;
 
 let cart = {};              // 實際內容在 store 建立後才載入（見下方 §2）
 let cartOpen = false;
@@ -585,7 +616,7 @@ function cartTotal(){
 }
 function setQty(id, n){
   const w = byId(id);
-  const cap = (w && isSingle(w)) ? 1 : cartMax();
+  const cap = (w && isSingle(w)) ? 1 : ((w && isScale(w)) ? 5 : cartMax());
   n = Math.max(0, Math.min(cap, n));
   if (n === 0) delete cart[id]; else cart[id] = n;
   store.set("cart", cart);
@@ -874,6 +905,24 @@ function renderCart(){
   view.innerHTML = `<div class="cartlist">
     ${ids.map(id => {
       const w = byId(id), q = cart[id];
+      if (isScale(w)){
+        return `<div class="cartrow scale">
+          <div class="rowtop">
+            <span class="thumb">
+              <img src="assets/img/${w.cat}/${w.id}.webp" alt=""
+                   data-glyph="${w.zh}" onerror="imgFallback(this)">
+            </span>
+            <span class="cname2">${w.zh}</span>
+            <button class="rm" data-dec0="${id}" aria-label="從清單移除：${w.zh}">✕</button>
+          </div>
+          <div class="scalerow" role="group" aria-label="${w.zh}的程度">
+            ${[1,2,3,4,5].map(n => `
+              <button class="lv${n <= q ? " on" : ""}" data-lv="${id}:${n}"
+                      aria-pressed="${n === q}" aria-label="程度 ${n}">${n}</button>`).join("")}
+          </div>
+          <div class="scalelabel">${intensityText(w, q)}</div>
+        </div>`;
+      }
       return `<div class="cartrow">
         <span class="thumb">
           <img src="assets/img/${w.cat}/${w.id}.webp" alt=""
@@ -901,13 +950,25 @@ function renderCart(){
     b.onclick = () => { setQty(b.dataset.inc, (cart[b.dataset.inc] || 0) + 1); render(); });
   view.querySelectorAll("[data-dec]").forEach(b =>
     b.onclick = () => { setQty(b.dataset.dec, (cart[b.dataset.dec] || 0) - 1); render(); });
+  view.querySelectorAll("[data-dec0]").forEach(b =>
+    b.onclick = () => { setQty(b.dataset.dec0, 0); render(); });
+  view.querySelectorAll("[data-lv]").forEach(b =>
+    b.onclick = () => {
+      const [id, n] = b.dataset.lv.split(":");
+      setQty(id, Number(n));
+      const w = byId(id);
+      speak({ id, cat:w.cat, zh: intensityText(w, Number(n)) });
+      render();
+    });
 
   view.querySelector("#cartSay").onclick = () => {
     unlock();
     if ("speechSynthesis" in window) speechSynthesis.cancel();
     ids.forEach((id, i) => {
       const w = byId(id);
-      const text = isSingle(w) ? w.zh : `${w.zh} ${cart[id]}${clsOf(w)}`;
+      const text = isScale(w)  ? intensityText(w, cart[id])
+                 : isSingle(w) ? w.zh
+                 : `${w.zh} ${cart[id]}${clsOf(w)}`;
       tts({ zh: text }, i > 0);   // 第一筆插隊，其餘接在後面
     });
     flash("唸出清單");
