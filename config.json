@@ -1,0 +1,44 @@
+{
+  "_說明": [
+    "這個檔案控制畫面上「顯示哪些項目」和「排列順序」，改完直接 commit 即可，不必動 index.html。",
+    "陣列由上到下就是畫面由左到右、由上到下的順序，調整順序＝搬動整個區塊的位置。",
+    "enabled 設成 false 會隱藏該項目，但設定保留著，日後改回 true 就會出現。",
+    "沒有列在這裡的項目會排在最後面，所以新增詞條時不一定要同步改這個檔。",
+    "檔案若刪除或格式寫錯，程式會自動退回內建的預設順序，不會壞掉。"
+  ],
+
+  "categories": [
+    { "id": "daily",  "enabled": true,  "_": "日常用品" },
+    { "id": "food",   "enabled": true,  "_": "食物飲料" },
+    { "id": "body",   "enabled": true,  "_": "身體不適" },
+    { "id": "people", "enabled": true,  "_": "家人醫護" },
+    { "id": "act",    "enabled": true,  "_": "我想要" }
+  ],
+
+  "words": [
+    { "id": "toothbrush", "enabled": true, "_": "牙刷" },
+    { "id": "glasses",    "enabled": true, "_": "眼鏡" },
+    { "id": "towel",      "enabled": true, "_": "毛巾" },
+    { "id": "television", "enabled": true, "_": "電視" },
+
+    { "id": "water",    "enabled": true, "_": "水" },
+    { "id": "rice",     "enabled": true, "_": "飯" },
+    { "id": "noodles",  "enabled": true, "_": "麵" },
+    { "id": "medicine", "enabled": true, "_": "藥" },
+
+    { "id": "headache", "enabled": true, "_": "頭痛" },
+    { "id": "sleepy",   "enabled": true, "_": "想睡" },
+    { "id": "thirsty",  "enabled": true, "_": "口渴" },
+    { "id": "cold",     "enabled": true, "_": "會冷" },
+
+    { "id": "wife",     "enabled": true, "_": "太太" },
+    { "id": "son",      "enabled": true, "_": "兒子" },
+    { "id": "daughter", "enabled": true, "_": "女兒" },
+    { "id": "doctor",   "enabled": true, "_": "醫生" },
+
+    { "id": "toilet", "enabled": true, "_": "上廁所" },
+    { "id": "sit-up", "enabled": true, "_": "坐起來" },
+    { "id": "eat",    "enabled": true, "_": "要吃飯" },
+    { "id": "bath",   "enabled": true, "_": "要洗澡" }
+  ]
+}

@@ -3,7 +3,7 @@
    策略：app shell 採 cache-first；assets（圖片／音檔）採 stale-while-revalidate。
    注意：改版時務必更新 VERSION，否則使用者拿到的是舊快取。 */
 
-const VERSION = "yutu-v5";
+const VERSION = "yutu-v6";
 const SHELL = `${VERSION}-shell`;
 const ASSETS = `${VERSION}-assets`;
 
@@ -48,6 +48,19 @@ self.addEventListener("fetch", e => {
           .catch(() => hit);
         return hit || net;
       })
+    );
+    return;
+  }
+
+  // config.json：網路優先，讓治療師改完設定就能立刻看到；離線才用快取
+  if (url.pathname.endsWith("/config.json")) {
+    e.respondWith(
+      fetch(request)
+        .then(res => {
+          if (res.ok) caches.open(SHELL).then(c => c.put(request, res.clone()));
+          return res;
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }

@@ -432,6 +432,55 @@ const LEXICON = [
 const byId  = id => LEXICON.find(w => w.id === id);
 const byCat = c  => LEXICON.filter(w => w.cat === c);
 
+/* ------------------------------------------------------------
+   config.json：控制類別與詞條的「顯示與否」和「排列順序」
+   - 陣列順序即畫面順序
+   - enabled:false 隱藏，但保留設定方便日後開回來
+   - config 沒列到的項目排在最後（新增詞條時不必同步改 config）
+   - 檔案缺失或格式錯誤時，退回程式內的預設順序，不會整個壞掉
+   ------------------------------------------------------------ */
+let CONFIG = null;
+
+function orderMaps(list){
+  const rank = new Map(), on = new Map();
+  (Array.isArray(list) ? list : []).forEach((x, i) => {
+    if (!x || !x.id) return;
+    rank.set(x.id, i);
+    on.set(x.id, x.enabled !== false);
+  });
+  return { rank, on };
+}
+
+function visibleCategories(){
+  if (!CONFIG || !Array.isArray(CONFIG.categories)) return CATEGORIES;
+  const { rank, on } = orderMaps(CONFIG.categories);
+  return CATEGORIES
+    .filter(c => on.get(c.id) !== false)
+    .slice()
+    .sort((a, b) => (rank.has(a.id) ? rank.get(a.id) : 999)
+                  - (rank.has(b.id) ? rank.get(b.id) : 999));
+}
+
+function visibleWords(catId){
+  const base = LEXICON.filter(w => w.cat === catId);
+  if (!CONFIG || !Array.isArray(CONFIG.words)) return base;
+  const { rank, on } = orderMaps(CONFIG.words);
+  return base
+    .filter(w => on.get(w.id) !== false)
+    .slice()
+    .sort((a, b) => (rank.has(a.id) ? rank.get(a.id) : 999)
+                  - (rank.has(b.id) ? rank.get(b.id) : 999));
+}
+
+async function loadConfig(){
+  try {
+    const r = await fetch("config.json", { cache:"no-cache" });
+    if (r.ok) CONFIG = await r.json();
+  } catch(e){
+    CONFIG = null;   // 靜默退回預設，不打擾使用者
+  }
+}
+
 /* ============================================================
    2. 本機儲存 —— 絕不外傳。localStorage 不可用時退回記憶體。
    ============================================================ */
@@ -635,7 +684,7 @@ function render(){
 function renderComm(){
   if (stack.length === 0){
     crumb.textContent = "你想說什麼？";
-    view.innerHTML = charRow() + `<div class="grid">${CATEGORIES.map(c => `
+    view.innerHTML = charRow() + `<div class="grid">${visibleCategories().map(c => `
       <button class="tile cat" data-cat="${c.id}">
         ${catArt(c)}
         <div class="label">${c.name}</div>
@@ -646,7 +695,7 @@ function renderComm(){
   } else {
     const cat = CATEGORIES.find(c => c.id === stack[0]);
     crumb.textContent = cat.name;
-    view.innerHTML = `<div class="grid">${byCat(cat.id).map(w => `
+    view.innerHTML = `<div class="grid">${visibleWords(cat.id).map(w => `
       <button class="tile" data-w="${w.id}">
         ${art(w)}
         <div class="label">${w.zh}</div>
@@ -660,9 +709,9 @@ function renderComm(){
 function renderPrac(){
   if (stack.length === 0){
     crumb.textContent = "選擇練習主題";
-    const cats = CATEGORIES.filter(c => byCat(c.id).some(w => w.practice));
+    const cats = visibleCategories().filter(c => visibleWords(c.id).some(w => w.practice));
     view.innerHTML = `<div class="grid">${cats.map(c => {
-      const n = byCat(c.id).filter(w => w.practice).length;
+      const n = visibleWords(c.id).filter(w => w.practice).length;
       return `<button class="tile cat" data-pc="${c.id}">
         ${catArt(c)}
         <div class="label">${c.name}<br><small style="font-weight:400">${n} 題</small></div>
@@ -680,7 +729,7 @@ function startSession(catId){
   session = {
     cat: catId,
     started: new Date().toISOString(),
-    items: byCat(catId).filter(w => w.practice).map(w => w.id),
+    items: visibleWords(catId).filter(w => w.practice).map(w => w.id),
     i: 0,
     level: 0,           // 本題已展開到第幾層提示
     results: []
@@ -870,7 +919,7 @@ if ("serviceWorker" in navigator){
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
 }
 
-setMode("comm");
+loadConfig().then(() => setMode("comm"));
 </script>
 </body>
 </html>
