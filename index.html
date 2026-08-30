@@ -669,10 +669,12 @@ function unlock(){
   });
 })();
 
-function tts(word){
+/* queue=true 時不清掉待唸佇列，讓多筆依序唸完（唸整份清單用）。
+   單筆點選則維持插隊，避免連點時聲音疊在一起。 */
+function tts(word, queue){
   if (!("speechSynthesis" in window)) return false;
   try {
-    speechSynthesis.cancel();
+    if (!queue) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(word.zh);
     const v = pickVoice();
     if (v) u.voice = v;
@@ -876,9 +878,9 @@ function renderCart(){
   view.querySelector("#cartSay").onclick = () => {
     unlock();
     if ("speechSynthesis" in window) speechSynthesis.cancel();
-    ids.forEach(id => {
+    ids.forEach((id, i) => {
       const w = byId(id);
-      tts({ zh: `${w.zh} ${cart[id]}${clsOf(w)}` });   // 語音合成會自動排隊
+      tts({ zh: `${w.zh} ${cart[id]}${clsOf(w)}` }, i > 0);   // 第一筆插隊，其餘接在後面
     });
     flash("唸出清單");
   };
