@@ -10,8 +10,9 @@
   "cart": {
     "enabled": true,
     "max": 5,
-    "categories": ["daily", "food", "people"],
-    "_說明": "enabled 關閉整個購物清單功能；max 是單項最大數量；categories 列出哪些類別的項目可以加入清單。身體不適（body）與我想要（act）預設不開放，因為頭痛、上廁所這類詞沒有數量的概念；需要的話把 body、act 加進來即可。"
+    "categories": ["daily", "food", "people", "act"],
+    "single": ["act", "body"],
+    "_說明": "enabled 關閉整個購物清單功能；max 是單項最大數量；categories 列出哪些類別的項目可以加入清單。身體不適（body）與我想要（act）預設不開放，因為頭痛、上廁所這類詞沒有數量的概念；需要的話把 body、act 加進來即可。single 列出「只能是 1」的類別：這些項目可以加入清單，但不顯示增減按鈕，唸出時也不帶數量與量詞。"
   },
 
   "categories": [

@@ -226,6 +226,10 @@ body[data-text="off"] .tile{ min-height:150px; }
   font-size:calc(26px * var(--step)); font-weight:800; line-height:1;
 }
 .stepper button:disabled{ opacity:.35; }
+.stepper button.rm{
+  border-color:var(--amber); color:var(--amber);
+  background:var(--paper); width:64px;
+}
 .stepper .qty{
   min-width:78px; text-align:center;
   font-size:calc(26px * var(--step)); font-weight:800;
@@ -563,6 +567,15 @@ function cartMax(){
 function isCountable(w){
   return cartEnabled() && cartCategories().includes(w.cat);
 }
+/* 只能是 1 的類別：像「上廁所」「頭痛」沒有數量的概念，
+   可以加入清單但不給增減，清單裡也不唸出數量與量詞。 */
+function cartSingleCats(){
+  const c = CONFIG && CONFIG.cart;
+  return (c && Array.isArray(c.single)) ? c.single : ["act", "body"];
+}
+function isSingle(w){
+  return cartSingleCats().includes(w.cat);
+}
 
 let cart = {};              // 實際內容在 store 建立後才載入（見下方 §2）
 let cartOpen = false;
@@ -571,7 +584,9 @@ function cartTotal(){
   return Object.values(cart).reduce((a, b) => a + b, 0);
 }
 function setQty(id, n){
-  n = Math.max(0, Math.min(cartMax(), n));
+  const w = byId(id);
+  const cap = (w && isSingle(w)) ? 1 : cartMax();
+  n = Math.max(0, Math.min(cap, n));
   if (n === 0) delete cart[id]; else cart[id] = n;
   store.set("cart", cart);
   paintCartCount();
@@ -824,8 +839,12 @@ function renderComm(){
           ${art(w)}
           <div class="label">${w.zh}</div>
         </button>
-        ${isCountable(w) ? `<button class="addbtn" data-add="${w.id}" aria-label="加入清單：${w.zh}">＋</button>` : ""}
-        ${q ? `<span class="qtytag">${q}</span>` : ""}
+        ${isCountable(w)
+          ? `<button class="addbtn${(isSingle(w) && q) ? " on" : ""}" data-add="${w.id}"
+                     aria-label="${(isSingle(w) && q) ? "從清單移除" : "加入清單"}：${w.zh}"
+                     aria-pressed="${isSingle(w) && q ? "true" : "false"}">${(isSingle(w) && q) ? "✓" : "＋"}</button>`
+          : ""}
+        ${(q && !isSingle(w)) ? `<span class="qtytag">${q}</span>` : ""}
       </div>`;
     }).join("")}</div>`;
     view.querySelectorAll("[data-w]").forEach(b =>
@@ -833,8 +852,12 @@ function renderComm(){
     view.querySelectorAll("[data-add]").forEach(b =>
       b.onclick = () => {
         const w = byId(b.dataset.add);
-        setQty(w.id, (cart[w.id] || 0) + 1);
-        speak(w);
+        if (isSingle(w)){
+          setQty(w.id, cart[w.id] ? 0 : 1);   // 再按一次就取消
+        } else {
+          setQty(w.id, (cart[w.id] || 0) + 1);
+        }
+        if (cart[w.id]) speak(w);
         render();
       });
   }
@@ -857,11 +880,15 @@ function renderCart(){
                data-glyph="${w.zh}" onerror="imgFallback(this)">
         </span>
         <span class="cname2">${w.zh}</span>
-        <span class="stepper">
-          <button data-dec="${id}" aria-label="減少">−</button>
-          <span class="qty">${q}${clsOf(w)}<small>${"●".repeat(q)}</small></span>
-          <button data-inc="${id}" aria-label="增加" ${q >= cartMax() ? "disabled" : ""}>＋</button>
-        </span>
+        ${isSingle(w)
+          ? `<span class="stepper">
+               <button class="rm" data-dec="${id}" aria-label="從清單移除：${w.zh}">✕</button>
+             </span>`
+          : `<span class="stepper">
+               <button data-dec="${id}" aria-label="減少">−</button>
+               <span class="qty">${q}${clsOf(w)}<small>${"●".repeat(q)}</small></span>
+               <button data-inc="${id}" aria-label="增加" ${q >= cartMax() ? "disabled" : ""}>＋</button>
+             </span>`}
       </div>`;
     }).join("")}
     <div style="height:12px"></div>
@@ -880,7 +907,8 @@ function renderCart(){
     if ("speechSynthesis" in window) speechSynthesis.cancel();
     ids.forEach((id, i) => {
       const w = byId(id);
-      tts({ zh: `${w.zh} ${cart[id]}${clsOf(w)}` }, i > 0);   // 第一筆插隊，其餘接在後面
+      const text = isSingle(w) ? w.zh : `${w.zh} ${cart[id]}${clsOf(w)}`;
+      tts({ zh: text }, i > 0);   // 第一筆插隊，其餘接在後面
     });
     flash("唸出清單");
   };
