@@ -497,7 +497,7 @@ function unlock(){
 (function probeAudio(){
   LEXICON.forEach(w => {
     audioAvail[w.id] = false;
-    fetch(`assets/audio/${w.id}.mp3`, { method:"HEAD" })
+    fetch(`assets/audio/${w.cat}/${w.id}.mp3`, { method:"HEAD" })
       .then(r => { audioAvail[w.id] = r.ok; })
       .catch(() => {});
   });
@@ -521,7 +521,7 @@ function speak(word){
   flash(word.zh);
   unlock();
   if (audioAvail[word.id]){
-    const a = new Audio(`assets/audio/${word.id}.mp3`);
+    const a = new Audio(`assets/audio/${word.cat}/${word.id}.mp3`);
     a.play().catch(() => tts(word));   // 檔案在但播不動時的最後保險
   } else {
     tts(word);                          // 同步呼叫，維持在手勢流程內
@@ -543,7 +543,9 @@ function flash(text){
 /* ============================================================
    4. 角色與圖片
    ------------------------------------------------------------
-   角色圖檔命名：assets/img/WF-{角色}-{類別}.webp
+   詞條圖檔：  assets/img/{類別}/{詞條id}.webp
+   詞條音檔：  assets/audio/{類別}/{詞條id}.mp3
+   角色類別圖：assets/img/WF-{角色}-{類別}.webp
    頭像（選用）：assets/img/WF-{角色}.webp
    退回順序：角色圖 → 無角色的 cat-{類別}.webp → 文字佔位
    詞條圖（n001…）不分角色，維持中性。
@@ -574,7 +576,7 @@ function imgFallback(el){
 
 function art(word){
   return `<div class="art">
-    <img src="assets/img/${word.id}.webp" alt=""
+    <img src="assets/img/${word.cat}/${word.id}.webp" alt=""
          data-glyph="${word.zh}" onerror="imgFallback(this)">
   </div>`;
 }
@@ -692,7 +694,7 @@ function renderTrial(){
   view.innerHTML = `
   <div class="practice">
     <div class="stimulus">
-      <img src="assets/img/${w.id}.webp" alt=""
+      <img src="assets/img/${w.cat}/${w.id}.webp" alt=""
            onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ph',textContent:'${w.zh}'}))">
     </div>
     <p class="ask">這是什麼？請說出來</p>

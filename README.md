@@ -50,27 +50,22 @@ Level 3  完整示範（顯示 + 發聲，跟著說）
 ```
 assets/
 ├── img/
-│   ├── toothbrush.webp        ← 檔名＝詞條 id
-│   ├── WF-cat-daily.webp      ← 類別圖：WF-{角色}-{類別}
-│   ├── WF-cat.webp            ← 角色頭像（選用）
-│   └── ...
-├── audio/
-│   ├── toothbrush.mp3
+│   ├── daily/      toothbrush.webp  glasses.webp  towel.webp  television.webp
+│   ├── food/       water.webp  rice.webp  noodles.webp  medicine.webp
+│   ├── body/       headache.webp  sleepy.webp  thirsty.webp  cold.webp
+│   ├── people/     wife.webp  son.webp  daughter.webp  doctor.webp
+│   ├── act/        toilet.webp  sit-up.webp  eat.webp  bath.webp
+│   ├── WF-cat-daily.webp        ← 類別圖：WF-{角色}-{類別}，放根目錄
+│   └── WF-cat.webp              ← 角色頭像（選用）
+├── audio/          與 img 相同的分類結構，副檔名 .mp3
+│   ├── daily/      toothbrush.mp3 ...
 │   └── ...
 ├── icon-192.png
 ├── icon-512.png
 └── icon-512-maskable.png
 ```
 
-**詞條 id 對照**
-
-| 類別 | id |
-|---|---|
-| 日常用品 | `toothbrush` `glasses` `towel` `television` |
-| 食物飲料 | `water` `rice` `noodles` `medicine` |
-| 身體不適 | `headache` `sleepy` `thirsty` `cold` |
-| 家人醫護 | `wife` `son` `daughter` `doctor` |
-| 我想要 | `toilet` `sit-up` `eat` `bath` |
+路徑規則：詞條圖是 `assets/img/{類別}/{詞條id}.webp`，詞條音檔是 `assets/audio/{類別}/{詞條id}.mp3`。類別圖與角色頭像不屬於任何單一類別，維持在 `assets/img/` 根目錄。
 
 **角色**：`cat`（萬小貓）、`dog`（萬大狗）、`boy`（萬小廷）、`girl`（萬小芳）
 **類別**：`daily` `food` `body` `people` `act`
