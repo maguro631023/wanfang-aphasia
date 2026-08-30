@@ -196,6 +196,8 @@ body[data-text="off"] .tile{ min-height:150px; }
 }
 
 .cartbtn{ position:relative; }
+.iconbtn[hidden]{ display:none; }
+.cartbtn .count[hidden]{ display:none; }
 .cartbtn .count{
   position:absolute; top:-6px; right:-6px;
   min-width:24px; height:24px; padding:0 6px; border-radius:12px;
@@ -245,55 +247,6 @@ body[data-text="off"] .tile{ min-height:150px; }
   z-index:40; max-width:90vw; text-align:center;
 }
 .said[hidden]{ display:none; }
-
-/* ---------- 購物清單 ---------- */
-function renderCart(){
-  crumb.textContent = "我的清單";
-  const ids = Object.keys(cart).filter(id => byId(id));
-  if (!ids.length){
-    view.innerHTML = `<div class="emptycart">清單是空的<br>在物品上按「＋」就會加進來</div>`;
-    return;
-  }
-  view.innerHTML = `<div class="cartlist">
-    ${ids.map(id => {
-      const w = byId(id), q = cart[id];
-      return `<div class="cartrow">
-        <span class="thumb">
-          <img src="assets/img/${w.cat}/${w.id}.webp" alt=""
-               data-glyph="${w.zh}" onerror="imgFallback(this)">
-        </span>
-        <span class="cname2">${w.zh}</span>
-        <span class="stepper">
-          <button data-dec="${id}" aria-label="減少">−</button>
-          <span class="qty">${q}${clsOf(w)}<small>${"●".repeat(q)}</small></span>
-          <button data-inc="${id}" aria-label="增加" ${q >= cartMax() ? "disabled" : ""}>＋</button>
-        </span>
-      </div>`;
-    }).join("")}
-    <div style="height:12px"></div>
-    <button class="bigbtn ok" id="cartSay">🔊 唸出整份清單</button>
-    <div style="height:10px"></div>
-    <button class="bigbtn ghost" id="cartClear">清空清單</button>
-  </div>`;
-
-  view.querySelectorAll("[data-inc]").forEach(b =>
-    b.onclick = () => { setQty(b.dataset.inc, (cart[b.dataset.inc] || 0) + 1); render(); });
-  view.querySelectorAll("[data-dec]").forEach(b =>
-    b.onclick = () => { setQty(b.dataset.dec, (cart[b.dataset.dec] || 0) - 1); render(); });
-
-  view.querySelector("#cartSay").onclick = () => {
-    unlock();
-    if ("speechSynthesis" in window) speechSynthesis.cancel();
-    ids.forEach(id => {
-      const w = byId(id);
-      tts({ zh: `${w.zh} ${cart[id]}${clsOf(w)}` });   // 語音合成會自動排隊
-    });
-    flash("唸出清單");
-  };
-  view.querySelector("#cartClear").onclick = () => {
-    cart = {}; store.set("cart", cart); paintCartCount(); render();
-  };
-}
 
 /* ---------- 練習模式 ---------- */
 .practice{ max-width:640px; margin:0 auto; }
@@ -611,7 +564,7 @@ function isCountable(w){
   return cartEnabled() && cartCategories().includes(w.cat);
 }
 
-let cart = store.get("cart", {});
+let cart = {};              // 實際內容在 store 建立後才載入（見下方 §2）
 let cartOpen = false;
 
 function cartTotal(){
@@ -632,6 +585,7 @@ function paintCartCount(){
 
 async function loadConfig(){
   try {
+    if (typeof fetch !== "function") return;
     const r = await fetch("config.json", { cache:"no-cache" });
     if (r.ok) CONFIG = await r.json();
   } catch(e){
@@ -657,6 +611,8 @@ const store = (() => {
     }
   };
 })();
+
+cart = store.get("cart", {});   // store 已就緒，載入上次未清空的清單
 
 /* ============================================================
    3. 語音輸出
@@ -702,11 +658,14 @@ function unlock(){
 
 /* 啟動時探測哪些詞有預錄音檔；查不到就一律走語音合成 */
 (function probeAudio(){
+  LEXICON.forEach(w => { audioAvail[w.id] = false; });
+  if (typeof fetch !== "function") return;   // 環境不支援就一律走語音合成
   LEXICON.forEach(w => {
-    audioAvail[w.id] = false;
-    fetch(`assets/audio/${w.cat}/${w.id}.mp3`, { method:"HEAD" })
-      .then(r => { audioAvail[w.id] = r.ok; })
-      .catch(() => {});
+    try {
+      fetch(`assets/audio/${w.cat}/${w.id}.mp3`, { method:"HEAD" })
+        .then(r => { audioAvail[w.id] = r.ok; })
+        .catch(() => {});
+    } catch(e){ /* 探測失敗不影響主流程 */ }
   });
 })();
 
@@ -877,6 +836,55 @@ function renderComm(){
         render();
       });
   }
+}
+
+/* ---------- 購物清單 ---------- */
+function renderCart(){
+  crumb.textContent = "我的清單";
+  const ids = Object.keys(cart).filter(id => byId(id));
+  if (!ids.length){
+    view.innerHTML = `<div class="emptycart">清單是空的<br>在物品上按「＋」就會加進來</div>`;
+    return;
+  }
+  view.innerHTML = `<div class="cartlist">
+    ${ids.map(id => {
+      const w = byId(id), q = cart[id];
+      return `<div class="cartrow">
+        <span class="thumb">
+          <img src="assets/img/${w.cat}/${w.id}.webp" alt=""
+               data-glyph="${w.zh}" onerror="imgFallback(this)">
+        </span>
+        <span class="cname2">${w.zh}</span>
+        <span class="stepper">
+          <button data-dec="${id}" aria-label="減少">−</button>
+          <span class="qty">${q}${clsOf(w)}<small>${"●".repeat(q)}</small></span>
+          <button data-inc="${id}" aria-label="增加" ${q >= cartMax() ? "disabled" : ""}>＋</button>
+        </span>
+      </div>`;
+    }).join("")}
+    <div style="height:12px"></div>
+    <button class="bigbtn ok" id="cartSay">🔊 唸出整份清單</button>
+    <div style="height:10px"></div>
+    <button class="bigbtn ghost" id="cartClear">清空清單</button>
+  </div>`;
+
+  view.querySelectorAll("[data-inc]").forEach(b =>
+    b.onclick = () => { setQty(b.dataset.inc, (cart[b.dataset.inc] || 0) + 1); render(); });
+  view.querySelectorAll("[data-dec]").forEach(b =>
+    b.onclick = () => { setQty(b.dataset.dec, (cart[b.dataset.dec] || 0) - 1); render(); });
+
+  view.querySelector("#cartSay").onclick = () => {
+    unlock();
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+    ids.forEach(id => {
+      const w = byId(id);
+      tts({ zh: `${w.zh} ${cart[id]}${clsOf(w)}` });   // 語音合成會自動排隊
+    });
+    flash("唸出清單");
+  };
+  view.querySelector("#cartClear").onclick = () => {
+    cart = {}; store.set("cart", cart); paintCartCount(); render();
+  };
 }
 
 /* ---------- 練習模式 ---------- */
