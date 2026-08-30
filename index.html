@@ -117,6 +117,27 @@ body[data-hand="right"] .navrow{ flex-direction:row-reverse; }
 /* 只有在返回鍵存在時標題才靠右，否則第一層的標題會孤立在右上角 */
 body[data-hand="right"] .navrow:has(.backbtn:not([hidden])) .crumb{ text-align:right; }
 
+/* ---------- 角色選擇列 ---------- */
+.charrow{
+  display:flex; gap:10px; flex-wrap:wrap;
+  padding-bottom:16px; margin-bottom:16px;
+  border-bottom:2px solid var(--surface-2);
+}
+.chip{
+  display:flex; align-items:center; gap:9px;
+  border:2px solid var(--line); background:var(--paper);
+  border-radius:999px; padding:6px 16px 6px 6px; min-height:56px;
+  font-weight:700; color:var(--ink-soft);
+}
+.chip .avatar{
+  width:42px; height:42px; border-radius:50%; overflow:hidden;
+  background:var(--surface); display:grid; place-items:center; flex:0 0 auto;
+}
+.chip .avatar img{ width:100%; height:100%; object-fit:cover; }
+.chip .avatar .ph{ font-size:calc(19px * var(--step)); font-weight:800; color:var(--teal-dark); }
+.chip.on{ border-color:var(--teal); background:#EAF4F3; color:var(--ink); }
+.chip:hover{ border-color:var(--teal); }
+
 /* ---------- 格狀選單 ---------- */
 .grid{
   display:grid;
@@ -519,19 +540,77 @@ function flash(text){
 /* ============================================================
    4. 圖片：檔案存在就用，不存在退回文字佔位圖
    ============================================================ */
-function art(word, cls){
+/* ============================================================
+   4. 角色與圖片
+   ------------------------------------------------------------
+   角色圖檔命名：assets/img/WF-{角色}-{類別}.webp
+   頭像（選用）：assets/img/WF-{角色}.webp
+   退回順序：角色圖 → 無角色的 cat-{類別}.webp → 文字佔位
+   詞條圖（n001…）不分角色，維持中性。
+   ============================================================ */
+const CHARACTERS = [
+  { id:"cat",  name:"萬小貓" },
+  { id:"dog",  name:"萬大狗" },
+  { id:"boy",  name:"萬小廷" },
+  { id:"girl", name:"萬小芳" }
+];
+
+let charId = store.get("character", "cat");
+if (!CHARACTERS.some(c => c.id === charId)) charId = "cat";
+
+/* 依序試 data-chain 裡的候選路徑，全部失敗才換成文字 */
+function imgFallback(el){
+  const chain = (el.dataset.chain || "").split("|").filter(Boolean);
+  if (chain.length){
+    el.dataset.chain = chain.slice(1).join("|");
+    el.src = chain[0];
+  } else {
+    const s = document.createElement("span");
+    s.className = "ph";
+    s.textContent = el.dataset.glyph || "";
+    el.replaceWith(s);
+  }
+}
+
+function art(word){
   return `<div class="art">
     <img src="assets/img/${word.id}.webp" alt=""
-         onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ph',textContent:'${word.zh}'}))">
+         data-glyph="${word.zh}" onerror="imgFallback(this)">
   </div>`;
 }
 
-/* 類別格子：assets/img/cat-{類別id}.webp，找不到就退回單字符號 */
 function catArt(c){
   return `<div class="art">
-    <img src="assets/img/cat-${c.id}.webp" alt=""
-         onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ph',textContent:'${c.glyph}'}))">
+    <img src="assets/img/WF-${charId}-${c.id}.webp" alt=""
+         data-chain="assets/img/cat-${c.id}.webp"
+         data-glyph="${c.glyph}" onerror="imgFallback(this)">
   </div>`;
+}
+
+/* 主畫面的角色選擇列 */
+function charRow(){
+  return `<div class="charrow" role="group" aria-label="選擇角色">
+    ${CHARACTERS.map(ch => `
+      <button class="chip${ch.id === charId ? " on" : ""}" data-char="${ch.id}"
+              aria-pressed="${ch.id === charId}">
+        <span class="avatar">
+          <img src="assets/img/WF-${ch.id}.webp" alt=""
+               data-chain="assets/img/WF-${ch.id}-daily.webp"
+               data-glyph="${ch.name.slice(-1)}" onerror="imgFallback(this)">
+        </span>
+        <span class="cname">${ch.name}</span>
+      </button>`).join("")}
+  </div>`;
+}
+
+function bindCharRow(root){
+  root.querySelectorAll("[data-char]").forEach(b => {
+    b.onclick = () => {
+      charId = b.dataset.char;
+      store.set("character", charId);
+      render();
+    };
+  });
 }
 
 /* ============================================================
@@ -554,11 +633,12 @@ function render(){
 function renderComm(){
   if (stack.length === 0){
     crumb.textContent = "你想說什麼？";
-    view.innerHTML = `<div class="grid">${CATEGORIES.map(c => `
+    view.innerHTML = charRow() + `<div class="grid">${CATEGORIES.map(c => `
       <button class="tile cat" data-cat="${c.id}">
         ${catArt(c)}
         <div class="label">${c.name}</div>
       </button>`).join("")}</div>`;
+    bindCharRow(view);
     view.querySelectorAll("[data-cat]").forEach(b =>
       b.onclick = () => { stack.push(b.dataset.cat); render(); });
   } else {
