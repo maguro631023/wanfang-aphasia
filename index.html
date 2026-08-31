@@ -370,6 +370,8 @@ dialog::backdrop{ background:rgba(15,34,51,.5); }
 .dlg-body{ padding:18px 20px 22px; display:grid; gap:20px; }
 .field > span{ display:block; font-weight:700; margin-bottom:9px; }
 .seg{ display:flex; gap:8px; }
+.seg.wrap{ flex-wrap:wrap; }
+.seg.wrap button{ flex:1 1 40%; }
 .seg button{
   flex:1; border:2px solid var(--line); background:var(--paper);
   padding:13px 8px; border-radius:9px; font-weight:700; min-height:52px;
@@ -433,6 +435,16 @@ footer{
         <button data-v="left"  aria-pressed="false">左手</button>
         <button data-v="right" aria-pressed="true">右手</button>
       </div>
+    </label>
+    <label class="field">
+      <span>語音語言</span>
+      <div class="seg wrap" data-set="lang">
+        <button data-v="zh"  aria-pressed="true">華語</button>
+        <button data-v="nan" aria-pressed="false">台語</button>
+        <button data-v="hak" aria-pressed="false">客語</button>
+        <button data-v="en"  aria-pressed="false">英語</button>
+      </div>
+      <p id="langNote" style="margin:8px 0 0; font-size:calc(13px * var(--step)); color:var(--ink-soft); line-height:1.5"></p>
     </label>
     <label class="field">
       <span>字級</span>
@@ -657,6 +669,7 @@ function buildSentence(){
 }
 
 function sentenceMode(){
+  if (lang !== "zh") return false;   // 組句規則是華語的，其他語言改為逐筆唸
   const c = CONFIG && CONFIG.cart;
   return !c || c.sentence !== false;
 }
@@ -712,6 +725,7 @@ const store = (() => {
 })();
 
 cart = store.get("cart", {});   // store 已就緒，載入上次未清空的清單
+let lang = store.get("lang", "zh");
 
 /* ============================================================
    3. 語音輸出
@@ -724,15 +738,42 @@ cart = store.get("cart", {});   // store 已就緒，載入上次未清空的清
    (2) iOS 需要在一次真實手勢中先呼叫過 speechSynthesis 才會啟用，
        因此第一次觸控時送一個靜音 utterance 解鎖。
    ============================================================ */
-const audioAvail = Object.create(null);   // id -> true/false，啟動時探測
+/* ------------------------------------------------------------
+   語音語言
+   zh 華語 / nan 台語 / hak 客語 / en 英語
+
+   重要限制：瀏覽器的語音合成沒有台語與客語的語音（iOS、Android
+   皆無），因此這兩種語言「只能」播放預錄音檔。沒有錄音時會退回
+   華語合成，並在設定裡說明。華語與英語則有系統語音可用。
+   ------------------------------------------------------------ */
+const LANGS = [
+  { id:"zh",  name:"華語", code:"zh-TW", tts:true  },
+  { id:"nan", name:"台語", code:"nan",   tts:false },
+  { id:"hak", name:"客語", code:"hak",   tts:false },
+  { id:"en",  name:"英語", code:"en-US", tts:true  }
+];
+const langOf = id => LANGS.find(l => l.id === id) || LANGS[0];
+
+/* 英語說法。沒列到的詞會退回華語，避免唸出奇怪的東西。 */
+const EN = {
+  toothbrush:"toothbrush", glasses:"glasses", towel:"towel", television:"television",
+  water:"water", rice:"rice", noodles:"noodles", medicine:"medicine",
+  headache:"headache", sleepy:"sleepy", thirsty:"thirsty", cold:"cold",
+  wife:"my wife", son:"my son", daughter:"my daughter", doctor:"doctor",
+  toilet:"go to the toilet", "sit-up":"sit up", eat:"eat", bath:"take a bath"
+};
+
+const audioAvail = Object.create(null);   // "lang:id" -> true/false，啟動時探測
 let   voicesReady = false;
 let   unlocked = false;
 
-function pickVoice(){
+function pickVoice(code){
   if (!("speechSynthesis" in window)) return null;
   const vs = speechSynthesis.getVoices() || [];
-  return vs.find(v => v.lang === "zh-TW")
-      || vs.find(v => v.lang && v.lang.replace("_","-").startsWith("zh"))
+  const c = (code || "zh-TW").replace("_", "-");
+  const base = c.split("-")[0];
+  return vs.find(v => v.lang && v.lang.replace("_","-") === c)
+      || vs.find(v => v.lang && v.lang.replace("_","-").split("-")[0] === base)
       || null;
 }
 
@@ -756,28 +797,34 @@ function unlock(){
   document.addEventListener(ev, unlock, { once:true, capture:true }));
 
 /* 啟動時探測哪些詞有預錄音檔；查不到就一律走語音合成 */
-(function probeAudio(){
-  LEXICON.forEach(w => { audioAvail[w.id] = false; });
-  if (typeof fetch !== "function") return;   // 環境不支援就一律走語音合成
+function audioPath(w, lg){ return `assets/audio/${lg}/${w.cat}/${w.id}.mp3`; }
+
+function probeAudio(lg){
+  LEXICON.forEach(w => { if (audioAvail[lg + ":" + w.id] === undefined) audioAvail[lg + ":" + w.id] = false; });
+  if (typeof fetch !== "function") return;
   LEXICON.forEach(w => {
     try {
-      fetch(`assets/audio/${w.cat}/${w.id}.mp3`, { method:"HEAD" })
-        .then(r => { audioAvail[w.id] = r.ok; })
+      fetch(audioPath(w, lg), { method:"HEAD" })
+        .then(r => { audioAvail[lg + ":" + w.id] = r.ok; })
         .catch(() => {});
     } catch(e){ /* 探測失敗不影響主流程 */ }
   });
-})();
+}
 
 /* queue=true 時不清掉待唸佇列，讓多筆依序唸完（唸整份清單用）。
    單筆點選則維持插隊，避免連點時聲音疊在一起。 */
 function tts(word, queue){
   if (!("speechSynthesis" in window)) return false;
+  const L = langOf(lang);
+  /* 台語與客語沒有系統語音，只能退回華語唸；設定裡有說明。 */
+  const useCode = L.tts ? L.code : "zh-TW";
+  const text = (lang === "en" && word.en) ? word.en : word.zh;
   try {
     if (!queue) speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(word.zh);
-    const v = pickVoice();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickVoice(useCode);
     if (v) u.voice = v;
-    u.lang = "zh-TW";
+    u.lang = useCode;
     u.rate = 0.85;
     speechSynthesis.speak(u);
     return true;
@@ -785,13 +832,16 @@ function tts(word, queue){
 }
 
 function speak(word){
-  flash(word.zh);
+  const en = EN[word.id];
+  const shown = (lang === "en" && en) ? en : word.zh;
+  flash(shown);
   unlock();
-  if (audioAvail[word.id]){
-    const a = new Audio(`assets/audio/${word.cat}/${word.id}.mp3`);
-    a.play().catch(() => tts(word));   // 檔案在但播不動時的最後保險
+  const payload = { id:word.id, cat:word.cat, zh:word.zh, en };
+  if (audioAvail[lang + ":" + word.id]){
+    const a = new Audio(audioPath(word, lang));
+    a.play().catch(() => tts(payload));   // 檔案在但播不動時的最後保險
   } else {
-    tts(word);                          // 同步呼叫，維持在手勢流程內
+    tts(payload);                          // 同步呼叫，維持在手勢流程內
   }
 }
 
@@ -1025,10 +1075,14 @@ function renderCart(){
     } else {
       ids.forEach((id, i) => {        // 條列模式：逐筆唸
         const w = byId(id);
-        const text = isScale(w)  ? intensityText(w, cart[id])
-                   : isSingle(w) ? w.zh
-                   : `${w.zh} ${cart[id]}${clsOf(w)}`;
-        tts({ zh: text }, i > 0);
+        if (lang !== "zh"){
+          tts({ id:w.id, zh:w.zh, en:EN[w.id] }, i > 0);   // 非華語：逐筆唸詞本身
+        } else {
+          const text = isScale(w)  ? intensityText(w, cart[id])
+                     : isSingle(w) ? w.zh
+                     : `${w.zh} ${cart[id]}${clsOf(w)}`;
+          tts({ zh: text }, i > 0);
+        }
       });
       flash("唸出清單");
     }
@@ -1198,7 +1252,7 @@ document.getElementById("btnCart").onclick = () => {
 };
 
 const dlg = document.getElementById("dlg");
-document.getElementById("btnSet").onclick = () => dlg.showModal();
+document.getElementById("btnSet").onclick = () => { paintLangNote(); dlg.showModal(); };
 document.getElementById("btnClose").onclick = () => dlg.close();
 
 document.querySelectorAll(".seg").forEach(seg => {
@@ -1212,9 +1266,32 @@ document.querySelectorAll(".seg").forEach(seg => {
 });
 
 function applySetting(key, val){
-  if (key === "step") document.documentElement.style.setProperty("--step", val);
-  else document.body.dataset[key] = val;
+  if (key === "step"){
+    document.documentElement.style.setProperty("--step", val);
+  } else if (key === "lang"){
+    lang = val;
+    store.set("lang", lang);
+    probeAudio(lang);      // 換語言就重新探測有沒有該語言的錄音
+    paintLangNote();
+    render();
+  } else {
+    document.body.dataset[key] = val;
+  }
   const s = store.get("settings", {}); s[key] = val; store.set("settings", s);
+}
+
+function paintLangNote(){
+  const el = document.getElementById("langNote");
+  if (!el) return;
+  const L = langOf(lang);
+  if (L.tts){
+    const v = pickVoice(L.code);
+    el.textContent = v ? `使用系統語音：${v.name}`
+                       : `這台裝置沒有${L.name}語音，請到系統設定安裝，或改放預錄音檔。`;
+  } else {
+    const n = LEXICON.filter(w => audioAvail[lang + ":" + w.id]).length;
+    el.textContent = `${L.name}沒有系統語音，只能播放預錄音檔（目前 ${n} / ${LEXICON.length} 個詞有錄音）。缺少錄音的詞會改用華語唸。`;
+  }
 }
 
 (function restore(){
@@ -1231,13 +1308,14 @@ function applySetting(key, val){
 document.getElementById("btnTest").onclick = () => {
   unlock();
   const info = document.getElementById("voiceInfo");
-  const v = pickVoice();
+  const L = langOf(lang);
+  const v = pickVoice(L.tts ? L.code : "zh-TW");
   const n = ("speechSynthesis" in window) ? (speechSynthesis.getVoices() || []).length : 0;
   if (!("speechSynthesis" in window)){
     info.textContent = "這個瀏覽器不支援語音合成，請改用 Chrome 或 Safari。";
   } else if (v){
     info.textContent = `使用語音：${v.name}（${v.lang}）`;
-    tts({ zh:"你好，這是語音測試" });
+    tts({ zh:"你好，這是語音測試", en:"Hello, this is a voice test" });
   } else if (n === 0){
     info.textContent = "尚未載入任何語音，請等一下再按一次。";
   } else {
@@ -1258,6 +1336,7 @@ if ("serviceWorker" in navigator){
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
 }
 
+probeAudio(lang);
 loadConfig().then(() => setMode("comm"));
 </script>
 </body>

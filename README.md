@@ -57,9 +57,11 @@ assets/
 │   ├── act/        toilet.webp  sit-up.webp  eat.webp  bath.webp
 │   ├── WF-cat-daily.webp        ← 類別圖：WF-{角色}-{類別}，放根目錄
 │   └── WF-cat.webp              ← 角色頭像（選用）
-├── audio/          與 img 相同的分類結構，副檔名 .mp3
-│   ├── daily/      toothbrush.mp3 ...
-│   └── ...
+├── audio/          先分語言，再分類別
+│   ├── zh/daily/   toothbrush.mp3 ...   華語
+│   ├── nan/daily/  toothbrush.mp3 ...   台語
+│   ├── hak/daily/  toothbrush.mp3 ...   客語
+│   └── en/daily/   toothbrush.mp3 ...   英語
 ├── icon-192.png
 ├── icon-512.png
 └── icon-512-maskable.png
@@ -74,7 +76,9 @@ assets/
 
 **圖片授權先確認再放**：ARASAAC（CC BY-NC-SA）、Mulberry Symbols（CC BY-SA）、Sclera 可用；個人化詞彙（太太、兒子、女兒）本來就必須自行拍攝。以萬芳名義發布，未授權圖片的風險不只是下架。
 
-**語音建議預錄真人**。程式會優先播放 `assets/audio/{id}.mp3`，找不到才退回 `SpeechSynthesis`。人聲對失語症者的辨識度明顯較好，而且錄音是一次性成本。
+**語音建議預錄真人**。程式會優先播放 `assets/audio/{語言}/{類別}/{詞條id}.mp3`，找不到才退回系統語音合成。人聲對失語症者的辨識度明顯較好，而且錄音是一次性成本。
+
+**台語與客語只能靠錄音。** 瀏覽器的語音合成在 iOS 與 Android 上都沒有台語（`nan`）與客語（`hak`）的語音，這是平台限制，不是設定問題。選了這兩種語言而該詞沒有錄音時，程式會退回華語唸，並在設定裡顯示目前的錄音覆蓋率。華語與英語則有系統語音可用，沒錄音也能運作。
 
 ---
 
