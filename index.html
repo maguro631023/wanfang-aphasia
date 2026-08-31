@@ -259,6 +259,12 @@ body[data-text="off"] .tile{ min-height:150px; }
   letter-spacing:.14em; line-height:1.1;
 }
 
+.sentence{
+  border:2px solid var(--teal); border-radius:var(--radius);
+  background:#EAF4F3; color:var(--ink);
+  padding:16px 18px; margin-bottom:14px;
+  font-size:calc(23px * var(--step)); font-weight:700; line-height:1.6;
+}
 .emptycart{ text-align:center; color:var(--ink-soft); padding:40px 0; font-size:calc(20px * var(--step)); }
 
 /* ---------- 說出後的確認 ---------- */
@@ -606,7 +612,54 @@ function isScale(w){
   return cartScaleCats().includes(w.cat);
 }
 const INTENSITY = ["", "有一點點", "有一點", "", "很", "非常"];
-const intensityText = (w, n) => `${INTENSITY[n] || ""}${w.zh}`;
+const intensityText = (w, n) => `${INTENSITY[n] || ""}${sayOf(w)}`;
+
+/* ------------------------------------------------------------
+   句中說法：清單上的詞是名詞，講成句子時常要換形式。
+   「牙刷」在清單裡是物品，在句子裡是「刷牙」。
+   沒有列到的詞就用原本的 zh。
+   ------------------------------------------------------------ */
+const SAY = {
+  toothbrush:"刷牙", television:"看電視",
+  toilet:"上廁所", "sit-up":"坐起來", eat:"吃飯", bath:"洗澡",
+  headache:"頭痛", sleepy:"想睡覺", thirsty:"口渴", cold:"冷"
+};
+const sayOf = w => SAY[w.id] || w.zh;
+
+/* 這些詞在句子裡是「想做的事」而不是「想要的東西」，
+   要接在「我想要」後面，不加數量。 */
+const ACTION_LIKE = new Set(["toothbrush", "television"]);
+
+const NUM_ZH = ["", "一", "兩", "三", "四", "五"];
+
+function joinZh(list){
+  if (list.length <= 1) return list.join("");
+  return list.slice(0, -1).join("、") + "，還有" + list[list.length - 1];
+}
+
+/* 把清單組成一句話：
+   我要一條毛巾、兩杯水。我想要刷牙，還有看電視。我覺得非常頭痛。 */
+function buildSentence(){
+  const ids = Object.keys(cart).filter(id => byId(id));
+  const want = [], acts = [], feels = [];
+  ids.forEach(id => {
+    const w = byId(id), q = cart[id];
+    if (isScale(w))       feels.push(intensityText(w, q));
+    else if (isSingle(w)) acts.push(sayOf(w));
+    else if (ACTION_LIKE.has(w.id)) acts.push(sayOf(w));
+    else                  want.push(`${NUM_ZH[q] || q}${clsOf(w)}${w.zh}`);
+  });
+  const parts = [];
+  if (want.length)  parts.push("我要" + joinZh(want));
+  if (acts.length)  parts.push("我想要" + joinZh(acts));
+  if (feels.length) parts.push("我覺得" + joinZh(feels));
+  return parts.length ? parts.join("。") + "。" : "";
+}
+
+function sentenceMode(){
+  const c = CONFIG && CONFIG.cart;
+  return !c || c.sentence !== false;
+}
 
 let cart = {};              // 實際內容在 store 建立後才載入（見下方 §2）
 let cartOpen = false;
@@ -941,7 +994,8 @@ function renderCart(){
       </div>`;
     }).join("")}
     <div style="height:12px"></div>
-    <button class="bigbtn ok" id="cartSay">🔊 唸出整份清單</button>
+    ${sentenceMode() ? `<div class="sentence" id="sentenceBox">${buildSentence()}</div>` : ""}
+    <button class="bigbtn ok" id="cartSay">🔊 說出來</button>
     <div style="height:10px"></div>
     <button class="bigbtn ghost" id="cartClear">清空清單</button>
   </div>`;
@@ -964,14 +1018,20 @@ function renderCart(){
   view.querySelector("#cartSay").onclick = () => {
     unlock();
     if ("speechSynthesis" in window) speechSynthesis.cancel();
-    ids.forEach((id, i) => {
-      const w = byId(id);
-      const text = isScale(w)  ? intensityText(w, cart[id])
-                 : isSingle(w) ? w.zh
-                 : `${w.zh} ${cart[id]}${clsOf(w)}`;
-      tts({ zh: text }, i > 0);   // 第一筆插隊，其餘接在後面
-    });
-    flash("唸出清單");
+    if (sentenceMode()){
+      const sentence = buildSentence();
+      tts({ zh: sentence });          // 整句一次唸完，語調比逐筆自然
+      flash("說出來了");
+    } else {
+      ids.forEach((id, i) => {        // 條列模式：逐筆唸
+        const w = byId(id);
+        const text = isScale(w)  ? intensityText(w, cart[id])
+                   : isSingle(w) ? w.zh
+                   : `${w.zh} ${cart[id]}${clsOf(w)}`;
+        tts({ zh: text }, i > 0);
+      });
+      flash("唸出清單");
+    }
   };
   view.querySelector("#cartClear").onclick = () => {
     cart = {}; store.set("cart", cart); paintCartCount(); render();
