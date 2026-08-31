@@ -633,6 +633,7 @@ const intensityText = (w, n) => `${INTENSITY[n] || ""}${sayOf(w)}`;
    ------------------------------------------------------------ */
 const SAY = {
   toothbrush:"刷牙", television:"看電視",
+  wife:"找太太", son:"找兒子", daughter:"找女兒", doctor:"找醫生",
   toilet:"上廁所", "sit-up":"坐起來", eat:"吃飯", bath:"洗澡",
   headache:"頭痛", sleepy:"想睡覺", thirsty:"口渴", cold:"冷"
 };
@@ -640,7 +641,7 @@ const sayOf = w => SAY[w.id] || w.zh;
 
 /* 這些詞在句子裡是「想做的事」而不是「想要的東西」，
    要接在「我想要」後面，不加數量。 */
-const ACTION_LIKE = new Set(["toothbrush", "television"]);
+const ACTION_LIKE = new Set(["toothbrush", "television", "wife", "son", "daughter", "doctor"]);
 
 const NUM_ZH = ["", "一", "兩", "三", "四", "五"];
 
@@ -664,12 +665,80 @@ function buildSentence(){
   const parts = [];
   if (want.length)  parts.push("我要" + joinZh(want));
   if (acts.length)  parts.push("我想要" + joinZh(acts));
-  if (feels.length) parts.push("我覺得" + joinZh(feels));
+  /* 感受不用「還有」串——程度詞多半以「有」開頭，會變成「還有有一點冷」 */
+  if (feels.length) parts.push("我覺得" + feels.join("、"));
   return parts.length ? parts.join("。") + "。" : "";
 }
 
+/* ------------------------------------------------------------
+   英語的句中說法。英語需要的資訊比華語多：單複數、冠詞、
+   物質名詞要配單位（water → a cup of water），
+   以及不適是用 have（a headache）還是 feel（cold）。
+   ------------------------------------------------------------ */
+const EN_ITEM = {
+  toothbrush:{ verb:"brush my teeth" },
+  television:{ verb:"watch TV" },
+  glasses:   { one:"my glasses",        many:"my glasses" },
+  towel:     { one:"a towel",           many:"towels" },
+  water:     { one:"a cup of water",    many:"cups of water" },
+  rice:      { one:"a bowl of rice",    many:"bowls of rice" },
+  noodles:   { one:"a bowl of noodles", many:"bowls of noodles" },
+  medicine:  { one:"my medicine",       many:"doses of medicine" },
+  wife:      { verb:"see my wife" },
+  son:       { verb:"see my son" },
+  daughter:  { verb:"see my daughter" },
+  doctor:    { verb:"see the doctor" },
+  toilet:    { verb:"go to the toilet" },
+  "sit-up":  { verb:"sit up" },
+  eat:       { verb:"eat" },
+  bath:      { verb:"take a bath" },
+  headache:  { have:"headache" },
+  sleepy:    { feel:"sleepy" },
+  thirsty:   { feel:"thirsty" },
+  cold:      { feel:"cold" }
+};
+const EN_NUM  = ["", "one", "two", "three", "four", "five"];
+const EN_ADV  = ["", "slightly ", "a little ", "", "very ", "extremely "];
+const EN_ADJ  = ["", "slight ", "mild ", "", "bad ", "severe "];
+
+function joinEn(list){
+  if (list.length <= 1) return list.join("");
+  if (list.length === 2) return list[0] + " and " + list[1];
+  return list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
+}
+
+function buildSentenceEN(){
+  const ids = Object.keys(cart).filter(id => byId(id));
+  const objs = [], acts = [], haves = [], feels = [];
+  ids.forEach(id => {
+    const w = byId(id), q = cart[id], e = EN_ITEM[w.id];
+    if (!e) return;
+    if (isScale(w)){
+      if (e.have)      haves.push("a " + EN_ADJ[q] + e.have);
+      else if (e.feel) feels.push(EN_ADV[q] + e.feel);
+    } else if (e.verb){
+      acts.push(e.verb);
+    } else if (isSingle(w)){
+      acts.push(e.one || w.zh);
+    } else {
+      objs.push(q === 1 ? e.one : `${EN_NUM[q] || q} ${e.many}`);
+    }
+  });
+  const parts = [];
+  if (objs.length)  parts.push("I need "   + joinEn(objs));
+  if (acts.length)  parts.push("I want to " + joinEn(acts));
+  if (haves.length) parts.push("I have "   + joinEn(haves));
+  if (feels.length) parts.push("I feel "   + joinEn(feels));
+  return parts.length ? parts.join(". ") + "." : "";
+}
+
+function buildSentenceFor(){
+  return lang === "en" ? buildSentenceEN() : buildSentence();
+}
+
 function sentenceMode(){
-  if (lang !== "zh") return false;   // 組句規則是華語的，其他語言改為逐筆唸
+  /* 台語與客語沒有可靠的書面組句規則，維持逐筆唸出 */
+  if (lang !== "zh" && lang !== "en") return false;
   const c = CONFIG && CONFIG.cart;
   return !c || c.sentence !== false;
 }
@@ -1044,7 +1113,7 @@ function renderCart(){
       </div>`;
     }).join("")}
     <div style="height:12px"></div>
-    ${sentenceMode() ? `<div class="sentence" id="sentenceBox">${buildSentence()}</div>` : ""}
+    ${sentenceMode() ? `<div class="sentence" id="sentenceBox">${buildSentenceFor()}</div>` : ""}
     <button class="bigbtn ok" id="cartSay">🔊 說出來</button>
     <div style="height:10px"></div>
     <button class="bigbtn ghost" id="cartClear">清空清單</button>
@@ -1069,8 +1138,8 @@ function renderCart(){
     unlock();
     if ("speechSynthesis" in window) speechSynthesis.cancel();
     if (sentenceMode()){
-      const sentence = buildSentence();
-      tts({ zh: sentence });          // 整句一次唸完，語調比逐筆自然
+      const sentence = buildSentenceFor();
+      tts({ zh: sentence, en: sentence });   // 整句一次唸完，語調比逐筆自然
       flash("說出來了");
     } else {
       ids.forEach((id, i) => {        // 條列模式：逐筆唸
