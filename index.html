@@ -378,6 +378,22 @@ dialog::backdrop{ background:rgba(15,34,51,.5); }
 }
 .seg button[aria-pressed="true"]{ background:var(--teal); color:#fff; border-color:var(--teal); }
 
+.qrbox{
+  border:2px solid var(--line); border-radius:var(--radius);
+  background:var(--surface); padding:16px; text-align:center;
+}
+.qrtitle{ font-weight:800; margin-bottom:12px; font-size:calc(16px * var(--step)); }
+.qrbox .qr{
+  width:200px; height:200px; max-width:100%;
+  background:#fff; padding:8px; border-radius:8px;
+  image-rendering:pixelated;          /* SVG 放大時邊緣保持銳利 */
+  display:block; margin:0 auto 12px;
+}
+.qrurl{
+  font-size:calc(12px * var(--step)); color:var(--ink-soft);
+  word-break:break-all; margin-bottom:12px; line-height:1.5;
+}
+
 footer{
   padding:16px 14px 26px; text-align:center;
   color:var(--ink-soft); font-size:calc(13px * var(--step)); line-height:1.6;
@@ -457,6 +473,15 @@ footer{
     <button class="bigbtn ghost" id="btnTest">測試語音</button>
     <p id="voiceInfo" style="margin:-8px 0 0; font-size:calc(14px * var(--step)); color:var(--ink-soft)"></p>
     <button class="bigbtn ghost" id="btnExport">匯出練習紀錄（JSON）</button>
+
+    <div class="qrbox">
+      <div class="qrtitle">用手機掃描開啟</div>
+      <img class="qr" src="assets/qr.svg" alt="本程式網址的 QR code"
+           onerror="this.src='assets/qr.png'">
+      <div class="qrurl" id="qrUrl"></div>
+      <button class="bigbtn ghost" id="btnCopy">複製網址</button>
+    </div>
+
     <button class="bigbtn ok" id="btnClose">完成</button>
   </div>
 </dialog>
@@ -1390,6 +1415,25 @@ document.getElementById("btnTest").onclick = () => {
   } else {
     info.textContent = "這台裝置沒有中文語音。Android 請到「設定 → 系統 → 語言與輸入 → 文字轉語音」安裝中文語音資料；iPhone 請到「設定 → 輔助使用 → 朗讀內容 → 語音」加入中文。";
   }
+};
+
+/* QR 圖是固定網址；文字部分顯示實際所在位置，
+   兩者不一致時（例如換了網域）看得出來。 */
+(function initQR(){
+  const el = document.getElementById("qrUrl");
+  if (el) el.textContent = location.href.split("#")[0];
+})();
+
+document.getElementById("btnCopy").onclick = async () => {
+  const url = location.href.split("#")[0];
+  const btn = document.getElementById("btnCopy");
+  try {
+    await navigator.clipboard.writeText(url);
+    btn.textContent = "已複製";
+  } catch(e){
+    btn.textContent = "請長按網址手動複製";
+  }
+  setTimeout(() => { btn.textContent = "複製網址"; }, 2000);
 };
 
 document.getElementById("btnExport").onclick = () => {
