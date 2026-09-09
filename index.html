@@ -259,10 +259,9 @@ body[data-text="off"] .tile{ min-height:150px; }
   letter-spacing:.14em; line-height:1.1;
 }
 
-.sentence.plain{
-  border-color:var(--line); background:var(--surface);
-  color:var(--ink-soft); font-weight:400;
-  font-size:calc(17px * var(--step));
+.langhint{
+  margin:-6px 0 14px; padding:0 4px;
+  font-size:calc(14px * var(--step)); color:var(--ink-soft); line-height:1.5;
 }
 .sentence .sline{ display:block; }
 .sentence .sline + .sline{ margin-top:8px; }
@@ -770,16 +769,141 @@ function buildSentenceEN(){
   return parts;
 }
 
+/* ============================================================
+   其他語言的組句規則
+   ------------------------------------------------------------
+   ⚠ 以下句型與詞形尚未經母語者校對，請逐條確認後再給病人使用。
+
+   每種語言需要四類資訊：
+     num    數字說法
+     adv    程度副詞（對應強度 1–5，3 為不加修飾）
+     items  每個詞在句中的形態
+              obj   當成「東西」時的名詞
+              unit  量詞／單位（沒有就省略）
+              verb  當成「想做的事」時的動詞片語
+              have  身體不適中「我有…」型
+              feel  身體不適中「我覺得…」型
+     frames 四種句型的外框
+
+   越南語的第二人稱要看年齡身分（anh/chị/em/cô），沒有安全的
+   預設值，因此句型一律避開第二人稱，改用「Làm ơn」（麻煩）。
+   ============================================================ */
+const L10N = {
+  id: {
+    num: ["", "satu", "dua", "tiga", "empat", "lima"],
+    adv: ["", "sedikit ", "agak ", "", "sangat ", "sangat "],
+    join: a => a.length <= 1 ? a.join("") : a.slice(0, -1).join(", ") + " dan " + a[a.length - 1],
+    items: {
+      toothbrush:{ verb:"menyikat gigi" },  television:{ verb:"menonton TV" },
+      towel:{ obj:"handuk" },               glasses:{ obj:"kacamata" },
+      water:{ obj:"air", unit:"gelas" },    rice:{ obj:"nasi", unit:"piring" },
+      noodles:{ obj:"mie", unit:"mangkuk" },medicine:{ obj:"obat" },
+      wife:{ verb:"bertemu istri saya" },   son:{ verb:"bertemu anak laki-laki saya" },
+      daughter:{ verb:"bertemu anak perempuan saya" }, doctor:{ verb:"bertemu dokter" },
+      toilet:{ verb:"ke toilet" }, "sit-up":{ verb:"duduk" },
+      eat:{ verb:"makan" },        bath:{ verb:"mandi" },
+      headache:{ have:"sakit" }, sleepy:{ feel:"mengantuk" },
+      thirsty:{ feel:"haus" },          cold:{ feel:"kedinginan" }
+    },
+    item: (it, q, L) => it.unit ? `${L.num[q] || q} ${it.unit} ${it.obj}`
+                                : `${L.num[q] || q} ${it.obj}`,
+    obj:  t => `Tolong ambilkan saya ${t}.`,
+    act:  t => `Saya ingin ${t}.`,
+    have: t => `Kepala saya ${t}.`,
+    feel: t => `Saya merasa ${t}.`
+  },
+
+  vi: {
+    num: ["", "một", "hai", "ba", "bốn", "năm"],
+    adv: ["", "hơi hơi ", "hơi ", "", "rất ", "cực kỳ "],
+    join: a => a.length <= 1 ? a.join("") : a.slice(0, -1).join(", ") + " và " + a[a.length - 1],
+    items: {
+      toothbrush:{ verb:"đánh răng" },      television:{ verb:"xem tivi" },
+      towel:{ obj:"khăn", unit:"cái" },     glasses:{ obj:"kính", unit:"cái" },
+      water:{ obj:"nước", unit:"ly" },      rice:{ obj:"cơm", unit:"bát" },
+      noodles:{ obj:"mì", unit:"bát" },     medicine:{ obj:"thuốc" },
+      wife:{ verb:"gặp vợ tôi" },           son:{ verb:"gặp con trai tôi" },
+      daughter:{ verb:"gặp con gái tôi" },  doctor:{ verb:"gặp bác sĩ" },
+      toilet:{ verb:"đi vệ sinh" }, "sit-up":{ verb:"ngồi dậy" },
+      eat:{ verb:"ăn cơm" },        bath:{ verb:"tắm" },
+      headache:{ have:"đau" },      sleepy:{ feel:"buồn ngủ" },
+      thirsty:{ feel:"khát nước" }, cold:{ feel:"lạnh" }
+    },
+    item: (it, q, L) => it.unit ? `${L.num[q] || q} ${it.unit} ${it.obj}`
+                                : `${L.num[q] || q} ${it.obj}`,
+    obj:  t => `Làm ơn lấy cho tôi ${t}.`,
+    act:  t => `Tôi muốn ${t}.`,
+    have: t => `Đầu tôi ${t}.`,
+    feel: t => `Tôi cảm thấy ${t}.`
+  },
+
+  ja: {
+    num: ["", "1", "2", "3", "4", "5"],
+    adv: ["", "少しだけ", "少し", "", "とても", "すごく"],
+    join:    a => a.join("と"),
+    joinAct: a => a.join("、"),
+    items: {
+      toothbrush:{ verb:"歯を磨きたい" },   television:{ verb:"テレビが見たい" },
+      towel:{ obj:"タオル", unit:"枚" },     glasses:{ obj:"めがね", unit:"つ" },
+      water:{ obj:"水", unit:"杯" },        rice:{ obj:"ごはん", unit:"杯" },
+      noodles:{ obj:"めん", unit:"杯" },     medicine:{ obj:"薬" },
+      wife:{ verb:"妻に会いたい" },          son:{ verb:"息子に会いたい" },
+      daughter:{ verb:"娘に会いたい" },      doctor:{ verb:"お医者さんに会いたい" },
+      toilet:{ verb:"トイレに行きたい" }, "sit-up":{ verb:"起き上がりたい" },
+      eat:{ verb:"ごはんが食べたい" },     bath:{ verb:"お風呂に入りたい" },
+      headache:{ have:"頭が痛い" }, sleepy:{ feel:"眠い" },
+      thirsty:{ feel:"のどが渇きました" }, cold:{ feel:"寒い" }
+    },
+    item: (it, q, L) => it.unit ? `${it.obj}${L.num[q] || q}${it.unit}`
+                                : it.obj,
+    obj:  t => `すみません、${t}をお願いします。`,
+    act:  t => `${t}です。`,
+    have: t => `${t}です。`,
+    feel: t => `${t}です。`
+  }
+};
+
+/* 通用組句器：資料在 L10N，流程共用 */
+function buildSentenceL10N(lg){
+  const L = L10N[lg];
+  if (!L) return [];
+  const ids = Object.keys(cart).filter(id => byId(id));
+  const objs = [], acts = [], haves = [], feels = [];
+  ids.forEach(id => {
+    const w = byId(id), q = cart[id], it = L.items[w.id];
+    if (!it) return;
+    if (isScale(w)){
+      const adv = L.adv[q] || "";
+      if (it.have)      haves.push(adv + it.have);
+      else if (it.feel) feels.push(adv + it.feel);
+    } else if (it.verb){
+      acts.push(it.verb);
+    } else if (isSingle(w)){
+      acts.push(it.verb || it.obj);
+    } else if (it.obj){
+      objs.push(L.item(it, q, L));
+    }
+  });
+  const parts = [];
+  if (objs.length)  parts.push(L.obj(L.join(objs)));
+  if (acts.length)  parts.push(L.act((L.joinAct || L.join)(acts)));
+  if (haves.length) parts.push(L.have(L.join(haves)));
+  if (feels.length) parts.push(L.feel(L.join(feels)));
+  return parts;
+}
+
 function sentenceParts(){
-  return lang === "en" ? buildSentenceEN() : buildSentenceZH();
+  if (lang === "en") return buildSentenceEN();
+  if (L10N[lang])    return buildSentenceL10N(lang);
+  /* 華語，以及台語客語——那兩種沒有系統語音，整句會用華語唸出，
+     仍然比一個詞一個詞蹦出來自然。 */
+  return buildSentenceZH();
 }
 function buildSentenceFor(){
   return sentenceParts().join(" ");
 }
 
 function sentenceMode(){
-  /* 台語與客語沒有可靠的書面組句規則，維持逐筆唸出 */
-  if (lang !== "zh" && lang !== "en") return false;
   const c = CONFIG && CONFIG.cart;
   return !c || c.sentence !== false;
 }
@@ -1190,11 +1314,10 @@ function renderCart(){
       </div>`;
     }).join("")}
     <div style="height:12px"></div>
-    ${sentenceMode()
-      ? `<div class="sentence" id="sentenceBox">${
-          sentenceParts().map(t => `<span class="sline">${t}</span>`).join("")
-        }</div>`
-      : `<div class="sentence plain" id="sentenceBox">目前是${langOf(lang).name}，會一個詞一個詞唸出來。<br>完整句子目前只支援華語與英語。</div>`}
+    ${sentenceMode() ? `<div class="sentence" id="sentenceBox">${
+        sentenceParts().map(t => `<span class="sline">${t}</span>`).join("")
+      }</div>${langOf(lang).tts ? "" :
+        `<div class="langhint">${langOf(lang).name}沒有系統語音，這句話會用華語唸出來。</div>`}` : ""}
     <button class="bigbtn ok" id="cartSay">🔊 說出來</button>
     <div style="height:10px"></div>
     <button class="bigbtn ghost" id="cartClear">清空清單</button>
