@@ -1084,12 +1084,21 @@ function probeAudio(lg){
 
 /* queue=true 時不清掉待唸佇列，讓多筆依序唸完（唸整份清單用）。
    單筆點選則維持插隊，避免連點時聲音疊在一起。 */
+/* 這台裝置實際有沒有這個語言的語音。
+   台語客語本來就沒有；日語等語言則要看使用者有沒有安裝語音資料。 */
+function voiceAvailable(lg){
+  const L = langOf(lg || lang);
+  return !!(L.tts && pickVoice(L.code));
+}
+
 function tts(word, queue){
   if (!("speechSynthesis" in window)) return false;
   const L = langOf(lang);
-  /* 台語與客語沒有系統語音，只能退回華語唸；設定裡有說明。 */
-  const useCode = L.tts ? L.code : "zh-TW";
-  const text = word.say || word.zh;
+  const ok = voiceAvailable(lang);
+  /* 沒有該語言的語音時，絕不能把外語文字丟給中文語音去唸——
+     那會唸出無意義的音。改成用華語語音唸華語內容。 */
+  const useCode = ok ? L.code : "zh-TW";
+  const text    = ok ? (word.say || word.zh) : word.zh;
   try {
     if (!queue) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -1316,8 +1325,8 @@ function renderCart(){
     <div style="height:12px"></div>
     ${sentenceMode() ? `<div class="sentence" id="sentenceBox">${
         sentenceParts().map(t => `<span class="sline">${t}</span>`).join("")
-      }</div>${langOf(lang).tts ? "" :
-        `<div class="langhint">${langOf(lang).name}沒有系統語音，這句話會用華語唸出來。</div>`}` : ""}
+      }</div>${voiceAvailable(lang) ? "" :
+        `<div class="langhint">這台裝置沒有${langOf(lang).name}語音，上面的文字可以直接給對方看，<b>唸出來的會是華語</b>。</div>`}` : ""}
     <button class="bigbtn ok" id="cartSay">🔊 說出來</button>
     <div style="height:10px"></div>
     <button class="bigbtn ghost" id="cartClear">清空清單</button>
@@ -1344,7 +1353,9 @@ function renderCart(){
     if (sentenceMode()){
       /* 一句一個 utterance：語音引擎會在每句之間自然換氣，
          整段一次送出的話幾乎不停頓，聽起來像在讀字。 */
-      sentenceParts().forEach((t, i) => tts({ zh:t, say:t }, i > 0));
+      /* 顯示維持目標語言（看護可以直接讀），但沒有語音時改唸華語 */
+      const spoken = voiceAvailable(lang) ? sentenceParts() : buildSentenceZH();
+      spoken.forEach((t, i) => tts({ zh:t, say:t }, i > 0));
       flash("說出來了");
     } else {
       ids.forEach((id, i) => {        // 條列模式：逐筆唸
@@ -1560,8 +1571,9 @@ function paintLangNote(){
   const L = langOf(lang);
   if (L.tts){
     const v = pickVoice(L.code);
-    el.textContent = v ? `使用系統語音：${v.name}`
-                       : `這台裝置沒有${L.name}語音，請到系統設定安裝，或改放預錄音檔。`;
+    el.textContent = v
+      ? `使用系統語音：${v.name}`
+      : `這台裝置沒有${L.name}語音，唸出來的會是華語。Android：設定 → 系統 → 語言與輸入 → 文字轉語音輸出 → 安裝語音資料；iPhone：設定 → 輔助使用 → 朗讀內容 → 語音。或改放預錄音檔。`;
   } else {
     const n = LEXICON.filter(w => audioAvail[lang + ":" + w.id]).length;
     el.textContent = `${L.name}沒有系統語音，只能播放預錄音檔（目前 ${n} / ${LEXICON.length} 個詞有錄音）。缺少錄音的詞會改用華語唸。`;
