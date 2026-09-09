@@ -371,7 +371,7 @@ dialog::backdrop{ background:rgba(15,34,51,.5); }
 .field > span{ display:block; font-weight:700; margin-bottom:9px; }
 .seg{ display:flex; gap:8px; }
 .seg.wrap{ flex-wrap:wrap; }
-.seg.wrap button{ flex:1 1 40%; }
+.seg.wrap button{ flex:1 1 28%; padding:13px 4px; }
 .seg button{
   flex:1; border:2px solid var(--line); background:var(--paper);
   padding:13px 8px; border-radius:9px; font-weight:700; min-height:52px;
@@ -459,6 +459,9 @@ footer{
         <button data-v="nan" aria-pressed="false">台語</button>
         <button data-v="hak" aria-pressed="false">客語</button>
         <button data-v="en"  aria-pressed="false">英語</button>
+        <button data-v="id"  aria-pressed="false">印尼語</button>
+        <button data-v="vi"  aria-pressed="false">越南語</button>
+        <button data-v="ja"  aria-pressed="false">日語</button>
       </div>
       <p id="langNote" style="margin:8px 0 0; font-size:calc(13px * var(--step)); color:var(--ink-soft); line-height:1.5"></p>
     </label>
@@ -841,21 +844,58 @@ let lang = store.get("lang", "zh");
    華語合成，並在設定裡說明。華語與英語則有系統語音可用。
    ------------------------------------------------------------ */
 const LANGS = [
-  { id:"zh",  name:"華語", code:"zh-TW", tts:true  },
-  { id:"nan", name:"台語", code:"nan",   tts:false },
-  { id:"hak", name:"客語", code:"hak",   tts:false },
-  { id:"en",  name:"英語", code:"en-US", tts:true  }
+  { id:"zh",  name:"華語",   code:"zh-TW", tts:true  },
+  { id:"nan", name:"台語",   code:"nan",   tts:false },
+  { id:"hak", name:"客語",   code:"hak",   tts:false },
+  { id:"en",  name:"英語",   code:"en-US", tts:true  },
+  { id:"id",  name:"印尼語", code:"id-ID", tts:true  },
+  { id:"vi",  name:"越南語", code:"vi-VN", tts:true  },
+  { id:"ja",  name:"日語",   code:"ja-JP", tts:true  }
 ];
 const langOf = id => LANGS.find(l => l.id === id) || LANGS[0];
 
-/* 英語說法。沒列到的詞會退回華語，避免唸出奇怪的東西。 */
-const EN = {
-  toothbrush:"toothbrush", glasses:"glasses", towel:"towel", television:"television",
-  water:"water", rice:"rice", noodles:"noodles", medicine:"medicine",
-  headache:"headache", sleepy:"sleepy", thirsty:"thirsty", cold:"cold",
-  wife:"my wife", son:"my son", daughter:"my daughter", doctor:"doctor",
-  toilet:"go to the toilet", "sit-up":"sit up", eat:"eat", bath:"take a bath"
+/* ------------------------------------------------------------
+   各語言的單詞說法。沒列到的詞會退回華語，避免唸出奇怪的東西。
+
+   ⚠ 這些譯詞尚未經母語者校對。醫院用的溝通工具譯錯會造成誤解，
+     上線給病人使用前，每一種語言都應請母語者逐條確認，
+     尤其是「身體不適」那一組。
+   ------------------------------------------------------------ */
+const TR = {
+  en: {
+    toothbrush:"toothbrush", glasses:"glasses", towel:"towel", television:"television",
+    water:"water", rice:"rice", noodles:"noodles", medicine:"medicine",
+    headache:"headache", sleepy:"sleepy", thirsty:"thirsty", cold:"cold",
+    wife:"my wife", son:"my son", daughter:"my daughter", doctor:"doctor",
+    toilet:"go to the toilet", "sit-up":"sit up", eat:"eat", bath:"take a bath"
+  },
+  id: {
+    toothbrush:"sikat gigi", glasses:"kacamata", towel:"handuk", television:"televisi",
+    water:"air", rice:"nasi", noodles:"mie", medicine:"obat",
+    headache:"sakit kepala", sleepy:"mengantuk", thirsty:"haus", cold:"kedinginan",
+    wife:"istri saya", son:"anak laki-laki saya", daughter:"anak perempuan saya", doctor:"dokter",
+    toilet:"mau ke toilet", "sit-up":"mau duduk", eat:"mau makan", bath:"mau mandi"
+  },
+  vi: {
+    toothbrush:"bàn chải đánh răng", glasses:"kính", towel:"khăn", television:"tivi",
+    water:"nước", rice:"cơm", noodles:"mì", medicine:"thuốc",
+    headache:"đau đầu", sleepy:"buồn ngủ", thirsty:"khát nước", cold:"lạnh",
+    wife:"vợ tôi", son:"con trai tôi", daughter:"con gái tôi", doctor:"bác sĩ",
+    toilet:"muốn đi vệ sinh", "sit-up":"muốn ngồi dậy", eat:"muốn ăn cơm", bath:"muốn tắm"
+  },
+  ja: {
+    toothbrush:"歯ブラシ", glasses:"めがね", towel:"タオル", television:"テレビ",
+    water:"水", rice:"ごはん", noodles:"めん", medicine:"薬",
+    headache:"頭が痛い", sleepy:"眠い", thirsty:"のどが渇いた", cold:"寒い",
+    wife:"妻", son:"息子", daughter:"娘", doctor:"お医者さん",
+    toilet:"トイレに行きたい", "sit-up":"起き上がりたい", eat:"ごはんが食べたい", bath:"お風呂に入りたい"
+  }
 };
+/* 目前語言下這個詞怎麼說；沒有譯詞就退回華語 */
+function textOf(w){
+  const t = TR[lang];
+  return (t && t[w.id]) || w.zh;
+}
 
 const audioAvail = Object.create(null);   // "lang:id" -> true/false，啟動時探測
 let   voicesReady = false;
@@ -912,7 +952,7 @@ function tts(word, queue){
   const L = langOf(lang);
   /* 台語與客語沒有系統語音，只能退回華語唸；設定裡有說明。 */
   const useCode = L.tts ? L.code : "zh-TW";
-  const text = (lang === "en" && word.en) ? word.en : word.zh;
+  const text = word.say || word.zh;
   try {
     if (!queue) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -926,11 +966,10 @@ function tts(word, queue){
 }
 
 function speak(word){
-  const en = EN[word.id];
-  const shown = (lang === "en" && en) ? en : word.zh;
+  const shown = textOf(word);
   flash(shown);
   unlock();
-  const payload = { id:word.id, cat:word.cat, zh:word.zh, en };
+  const payload = { id:word.id, cat:word.cat, zh:word.zh, say:shown };
   if (audioAvail[lang + ":" + word.id]){
     const a = new Audio(audioPath(word, lang));
     a.play().catch(() => tts(payload));   // 檔案在但播不動時的最後保險
@@ -1164,13 +1203,13 @@ function renderCart(){
     if ("speechSynthesis" in window) speechSynthesis.cancel();
     if (sentenceMode()){
       const sentence = buildSentenceFor();
-      tts({ zh: sentence, en: sentence });   // 整句一次唸完，語調比逐筆自然
+      tts({ zh: sentence, say: sentence });   // 整句一次唸完，語調比逐筆自然
       flash("說出來了");
     } else {
       ids.forEach((id, i) => {        // 條列模式：逐筆唸
         const w = byId(id);
         if (lang !== "zh"){
-          tts({ id:w.id, zh:w.zh, en:EN[w.id] }, i > 0);   // 非華語：逐筆唸詞本身
+          tts({ id:w.id, zh:w.zh, say:textOf(w) }, i > 0);   // 非華語：逐筆唸詞本身
         } else {
           const text = isScale(w)  ? intensityText(w, cart[id])
                      : isSingle(w) ? w.zh
@@ -1409,7 +1448,10 @@ document.getElementById("btnTest").onclick = () => {
     info.textContent = "這個瀏覽器不支援語音合成，請改用 Chrome 或 Safari。";
   } else if (v){
     info.textContent = `使用語音：${v.name}（${v.lang}）`;
-    tts({ zh:"你好，這是語音測試", en:"Hello, this is a voice test" });
+    const demo = { zh:"你好，這是語音測試", en:"Hello, this is a voice test",
+                   id:"Halo, ini tes suara", vi:"Xin chào, đây là bài kiểm tra giọng nói",
+                   ja:"こんにちは、音声テストです" };
+    tts({ zh:demo.zh, say: demo[lang] || demo.zh });
   } else if (n === 0){
     info.textContent = "尚未載入任何語音，請等一下再按一次。";
   } else {
